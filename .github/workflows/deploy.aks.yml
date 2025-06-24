@@ -1,0 +1,95 @@
+# .github/workflows/aks-deploy.yml
+name: Deploy App to AKS
+
+on:
+  workflow_call:
+    inputs:
+      # Inputs provided by the calling workflow
+      image_tag:
+        description: 'Full Docker image tag to deploy (e.g., your-acr.azurecr.io/your-container:sha)'
+        required: true
+        type: string
+      package_name:
+        description: 'The name of the package from package.json (lowercase)'
+        required: true
+        type: string
+      package_version:
+        description: 'The version of the package from package.json'
+        required: true
+        type: string
+    secrets:
+      # Explicitly declare which secrets are expected from the caller
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+
+# Define environment variables specific to this deploy workflow
+env:
+  AZURE_CONTAINER_REGISTRY: "your-azure-container-registry" # Replace with your ACR name
+  RESOURCE_GROUP: "your-resource-group"                     # Replace with your AKS resource group
+  CLUSTER_NAME: "your-cluster-name"                         # Replace with your AKS cluster name
+  DEPLOYMENT_MANIFEST_PATH: "your-deployment-manifest-path" # IMPORTANT: Replace with path to your manifest!
+  # IMAGE_PULL_SECRET_NAME: "your-image-pull-secret-name" # This was in comments, uncomment if used
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # To checkout the code
+      id-token: write # Required for azure/login (OIDCs)
+      # pull-requests: write # Only if you write back to PRs/code, which deploy usually doesn't
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v1.4.6
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up kubelogin for non-interactive login
+        uses: azure/use-kubelogin@v1
+        with:
+          kubelogin-version: 'v0.0.25'
+
+      - name: Get K8s context
+        uses: azure/aks-set-context@v3
+        with:
+          resource-group: ${{ env.RESOURCE_GROUP }}
+          cluster-name: ${{ env.CLUSTER_NAME }}
+          admin: 'false'
+          use-kubelogin: 'true'
+
+      - name: Update Kubernetes Manifest Image
+        # This step uses 'sed' to update the image tag in your deployment manifest.
+        # It's crucial that DEPLOYMENT_MANIFEST_PATH points to the actual file.
+        # The sed command needs to be precise for your manifest.
+        # It assumes your manifest has a line like:
+        # image: your-azure-container-registry.azurecr.io/your-container-name:old-tag
+        # where 'your-container-name' comes from env.CONTAINER_NAME or inputs.package_name
+        run: |
+          NEW_IMAGE_TAG="${{ inputs.image_tag }}"
+          
+          # This sed command replaces the existing image tag with the new one.
+          # It uses the ACR registry and the CONTAINER_NAME defined in env vars of build-push-acr.yml,
+          # or if CONTAINER_NAME corresponds to inputs.package_name, you can use that.
+          # Given your original `az acr build` uses `env.CONTAINER_NAME`, let's assume your manifest also uses it.
+          # The `.*` matches any existing tag.
+          sed -i "s|${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_NAME }}:.*|image: ${NEW_IMAGE_TAG}|g" ${{ env.DEPLOYMENT_MANIFEST_PATH }}
+          
+          echo "Manifest updated with image: $NEW_IMAGE_TAG"
+          cat ${{ env.DEPLOYMENT_MANIFEST_PATH }} # For debugging: print updated manifest content
+
+      - name: Deploys application
+        uses: Azure/k8s-deploy@v4
+        with:
+          action: deploy
+          manifests: ${{ env.DEPLOYMENT_MANIFEST_PATH }}
+          images: |
+            ${{ inputs.image_tag }} # Use the full image tag passed as input
