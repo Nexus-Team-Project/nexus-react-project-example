@@ -7,22 +7,31 @@ on:
     branches: [ "main" ]
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Get package name and version from package.json
         id: package_info_step # Give this step an ID to access its outputs
         run: |
           PACKAGE_NAME=$(jq -r '.name' package.json)
           PACKAGE_VERSION=$(jq -r '.version' package.json)
+
+          # Convert name to lowercase for Docker image compatibility
+          PACKAGE_NAME_LOWERCASE=$(echo "$PACKAGE_NAME" | tr '[:upper:]' '[:lower:]')
+
+          # Output both values to be accessible in subsequent steps
+          echo "package_name=$PACKAGE_NAME_LOWERCASE" >> $GITHUB_OUTPUT
+          echo "package_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+        shell: bash # Explicitly specify bash for consistent behavior
+
       - name: Build the Docker image
-        run: docker build . --file Dockerfile --tag "${{ secrets.DOCKER_USERNAME }}"/"${PACKAGE_NAME}":"${PACKAGE_VERSION}"
-      - name: Push the Docker image   
+        # Access the outputs from the previous step using steps.<id>.outputs.<name>
+        run: docker build . --file Dockerfile --tag "${{ secrets.DOCKER_USERNAME }}/${{ steps.package_info_step.outputs.package_name }}:${{ steps.package_info_step.outputs.package_version }}"
+
+      - name: Push the Docker image
         run: |
-            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-            docker push "${{ secrets.DOCKER_USERNAME }}"/"${PACKAGE_NAME}":"${PACKAGE_VERSION}"
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+          docker push "${{ secrets.DOCKER_USERNAME }}/${{ steps.package_info_step.outputs.package_name }}:${{ steps.package_info_step.outputs.package_version }}"
