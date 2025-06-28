@@ -1,7 +1,7 @@
 import React from 'react';
-import ReactDOM from 'react-dom/client'; // Use createRoot for React 18+
-import App from './app'; // Use lowercase to match the actual file name
-import './index.css'; // Import your CSS
+import ReactDOM from 'react-dom/client';
+import App from './app';
+import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

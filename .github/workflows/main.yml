@@ -1,0 +1,16 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: ["feat/add-ci", "develop"]
+  pull_request:
+    branches: ["feat/add-ci"]
+
+jobs:
+  # Call the build workflow
+  build:
+    uses: ./.github/workflows/build.docker.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
