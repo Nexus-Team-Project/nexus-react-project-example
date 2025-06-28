@@ -33,7 +33,6 @@ on:
   workflow_call:  # Makes this workflow reusable
 
 env:
-  AZURE_CONTAINER_REGISTRY: "your-acr-name"
   IMAGE_TAG: ${{ vars.IMAGE_TAG_NP }}
 
 jobs:
@@ -54,6 +53,6 @@ jobs:
 
       - name: Build and push to ACR
         run: |
-          az acr build --image ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ github.event.repository.name }}:${{ env.IMAGE_TAG }} \
-                       --registry ${{ env.AZURE_CONTAINER_REGISTRY }} \
+          az acr build --image ${{ vars.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ github.event.repository.name }}:${{ env.IMAGE_TAG }} \
+                       --registry ${{ vars.AZURE_CONTAINER_REGISTRY }} \
                        -g ${{ vars.RESOURCE_GROUP }} .
