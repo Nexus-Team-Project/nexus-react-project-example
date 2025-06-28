@@ -14,3 +14,12 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+  # Deploy to AKS after successful build
+  deploy:
+    needs: build
+    uses: ./.github/workflows/deploy.acr.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write

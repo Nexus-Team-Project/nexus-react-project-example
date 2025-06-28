@@ -1,0 +1,51 @@
+name: Deploy to AKS
+
+on:
+  workflow_call:  # Makes this workflow reusable
+
+env:
+  NAMESPACE: ${{ vars.NAMESPACE_NAME_NP }}
+  CLUSTER_NAME: ${{ vars.CLUSTER_NAME }}
+  IMAGE_TAG: ${{ vars.IMAGE_TAG_NP }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v1.4.6
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials --resource-group ${{ vars.RESOURCE_GROUP }} --name ${{ env.CLUSTER_NAME }}
+
+      - name: Deploy application
+        run: |
+          # Create or update deployment
+          kubectl create deployment ${{ github.event.repository.name }} \
+            --image=${{ vars.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ github.event.repository.name }}:${{ env.IMAGE_TAG }} \
+            --namespace=${{ env.NAMESPACE }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+          
+          # Create or update service on port 3000
+          kubectl expose deployment ${{ github.event.repository.name }} \
+            --port=3000 \
+            --target-port=3000 \
+            --type=ClusterIP \
+            --namespace=${{ env.NAMESPACE }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Wait for deployment to be ready
+        run: |
+          kubectl rollout status deployment/${{ github.event.repository.name }} --namespace=${{ env.NAMESPACE }} --timeout=300s
+
+      - name: Get service endpoint
+        run: |
+          echo "Deployment completed successfully!"
+          kubectl get service ${{ github.event.repository.name }} --namespace=${{ env.NAMESPACE }}
