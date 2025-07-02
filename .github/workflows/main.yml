@@ -7,19 +7,8 @@ on:
     branches: ["feat/add-ci"]
 
 jobs:
-  # Call the build workflow
-  build:
-    uses: ./.github/workflows/build.docker.yml
+  call-full-pipeline:
+    name: Run Full CI/CD Pipeline
+    uses: Nexus-Team-Project/nexus-react-project-example/.github/workflows/main.yml@feat/build-basic-ci
     secrets: inherit
-    permissions:
-      contents: read
-      id-token: write
 
-  # Deploy to AKS after successful build
-  deploy:
-    needs: build
-    uses: ./.github/workflows/deploy.acr.yml
-    secrets: inherit
-    permissions:
-      contents: read
-      id-token: write
