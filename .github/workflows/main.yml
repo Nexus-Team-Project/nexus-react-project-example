@@ -9,6 +9,6 @@ on:
 jobs:
   call-full-pipeline:
     name: Run Full CI/CD Pipeline
-    uses: Nexus-Team-Project/cicd-tools/.github/workflows/main.yml@refs/heads/feat/build-basic-ci
+    uses: Nexus-Team-Project/cicd-tools/.github/workflows/main.yml@refs/heads/feat/build-basic-cicd
     secrets: inherit
 
