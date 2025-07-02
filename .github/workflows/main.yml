@@ -1,11 +1,9 @@
 name: CI/CD Pipeline
-
 on:
   push:
     branches: ["feat/add-ci", "develop"]
   pull_request:
     branches: ["feat/add-ci"]
-
 jobs:
   call-full-pipeline:
     name: Run Full CI/CD Pipeline
