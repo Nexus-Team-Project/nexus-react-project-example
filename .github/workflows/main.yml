@@ -13,5 +13,5 @@ permissions:
 jobs:
   call-full-pipeline:
     name: Run Full CI/CD Pipeline
-    uses: Nexus-Team-Project/cicd-tools/.github/workflows/main.yml@build-basic-cicd
+    uses: Nexus-Team-Project/cicd-tools/.github/workflows/main.yml@main
     secrets: inherit
