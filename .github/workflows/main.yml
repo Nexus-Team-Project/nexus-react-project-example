@@ -1,16 +1,17 @@
 name: CI/CD Pipeline
-
 on:
   push:
-    branches: ["feat/add-ci", "develop"]
+    branches: ["dev"]
   pull_request:
-    branches: ["feat/add-ci"]
+    branches: ["main", "dev"]
+
+permissions:
+  contents: read
+  id-token: write
+  actions: write 
 
 jobs:
-  # Call the build workflow
-  build:
-    uses: ./.github/workflows/build.docker.yml
+  call-full-pipeline:
+    name: Run Full CI/CD Pipeline
+    uses: Nexus-Team-Project/cicd-tools/.github/workflows/main.yml@build-basic-cicd
     secrets: inherit
-    permissions:
-      contents: read
-      id-token: write

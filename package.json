@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "echo \"No tests specified\"",
-    "deploy": "npx serve dist"
+    "deploy": "npx serve dist -l 3000"
   },
   "dependencies": {
     "react": "^19.1.0",
