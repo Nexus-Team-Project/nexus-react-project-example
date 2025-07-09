@@ -1,9 +1,9 @@
 name: CI/CD Pipeline
 on:
   push:
-    branches: ["feat/add-ci", "develop"]
+    branches: ["main"]
   pull_request:
-    branches: ["feat/add-ci"]
+    branches: ["main", "dev"]
 
 permissions:
   contents: read
