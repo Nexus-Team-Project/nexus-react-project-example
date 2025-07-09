@@ -4,12 +4,14 @@ on:
     branches: ["feat/add-ci", "develop"]
   pull_request:
     branches: ["feat/add-ci"]
+
+permissions:
+  contents: read
+  id-token: write
+  actions: write 
    
 jobs:
   call-full-pipeline:
     name: Run Full CI/CD Pipeline
     uses: Nexus-Team-Project/cicd-tools/.github/workflows/main.yml@build-basic-cicd
     secrets: inherit
-    permissions:
-      contents: read
-      id-token: write
