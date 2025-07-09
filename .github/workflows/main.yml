@@ -10,7 +10,6 @@ permissions:
   id-token: write
   actions: write 
 
-  
 jobs:
   call-full-pipeline:
     name: Run Full CI/CD Pipeline
