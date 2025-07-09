@@ -5,7 +5,6 @@ on:
   pull_request:
     branches: ["feat/add-ci"]
 
-    
 permissions:
   contents: read
   id-token: write
