@@ -16,7 +16,8 @@ metadata:
     appgw.ingress.kubernetes.io/health-probe-unhealthy-threshold: "3"
 spec:
   rules:
-  - http:
+  - host: dev.nexus-online.net
+    http:
       paths:
       - path: /
         pathType: Prefix
