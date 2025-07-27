@@ -14,7 +14,9 @@ spec:
     metadata:
       labels:
         app: nexus-react-project-example
+        azure.workload.identity/use: "true" 
     spec:
+      serviceAccountName: keyvault-workload-sa
       containers:
       - name: nexus-react-project-example
         image: nexusacr20250625.azurecr.io/nexus-react-project-example:dev  # Replace with your actual image
@@ -24,6 +26,10 @@ spec:
         env:
         - name: NODE_ENV
           value: "production"
+        volumeMounts:
+        - mountPath: /mnt/secrets-store
+          name: secret-volume
+          readOnly: true
         resources:
           requests:
             memory: "128Mi"
@@ -55,3 +61,10 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 10
+      volumes: 
+      - name: secret-volume
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: nexus-keyvault
