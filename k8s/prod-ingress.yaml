@@ -1,0 +1,35 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    appgw.ingress.kubernetes.io/appgw-ssl-certificate: prod-nexus-online-net-letsencrypt
+    appgw.ingress.kubernetes.io/backend-path-prefix: /
+    appgw.ingress.kubernetes.io/backend-protocol: http
+    appgw.ingress.kubernetes.io/connection-draining: "true"
+    appgw.ingress.kubernetes.io/connection-draining-timeout: "30"
+    appgw.ingress.kubernetes.io/health-probe-interval: "15"
+    appgw.ingress.kubernetes.io/health-probe-path: /
+    appgw.ingress.kubernetes.io/health-probe-timeout: "5"
+    appgw.ingress.kubernetes.io/health-probe-unhealthy-threshold: "3"
+    appgw.ingress.kubernetes.io/ssl-redirect: "true"
+  labels:
+    environment: production
+  name: prod-https-ingress
+  namespace: production
+spec:
+  ingressClassName: azure-application-gateway
+  rules:
+  - host: prod.nexus-online.net
+    http:
+      paths:
+      - backend:
+          service:
+            name: nexus-react-project-example
+            port:
+              number: 3000
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - prod.nexus-online.net
+    secretName: prod.nexus-online.net-tls
