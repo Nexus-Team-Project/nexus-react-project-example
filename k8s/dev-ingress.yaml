@@ -14,6 +14,8 @@ metadata:
     appgw.ingress.kubernetes.io/health-probe-timeout: "5"
     appgw.ingress.kubernetes.io/health-probe-unhealthy-threshold: "3"
     appgw.ingress.kubernetes.io/ssl-redirect: "true"
+  labels:
+    environment: development    
 spec:
   ingressClassName: azure-application-gateway
   rules:
