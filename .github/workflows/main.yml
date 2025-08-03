@@ -16,4 +16,3 @@ jobs:
     name: Run Full CI/CD Pipeline
     uses: Nexus-Team-Project/cicd-tools/.github/workflows/main.yml@feat/deploy-with-argo
     secrets: inherit
-    
