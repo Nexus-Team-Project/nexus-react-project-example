@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: ["dev"]
 
-    
 permissions:
   contents: read
   id-token: write
@@ -15,5 +14,5 @@ permissions:
 jobs:
   call-full-pipeline:
     name: Run Full CI/CD Pipeline
-    uses: Nexus-Team-Project/cicd-tools/.github/workflows/main.yml@main
+    uses: Nexus-Team-Project/cicd-tools/.github/workflows/main.yml@feat/deploy-with-argo
     secrets: inherit
