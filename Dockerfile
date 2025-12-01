@@ -1,10 +1,8 @@
 FROM node:22-slim
 
-RUN cd client
-
 WORKDIR /app
 
-COPY . .
+COPY client .
 
 RUN npm ci 
 
