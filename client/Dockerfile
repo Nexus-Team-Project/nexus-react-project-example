@@ -2,7 +2,7 @@ FROM node:22-slim
 
 WORKDIR /app
 
-COPY client/ .
+COPY client .
 
 RUN npm ci 
 
