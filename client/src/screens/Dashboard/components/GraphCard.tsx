@@ -17,7 +17,7 @@ const options = {
 
 function GraphCard({ title }: { title: string }) {
   return (
-    <div className="bg-background border border-border rounded-2xl p-4 w-full flex flex-col justify-between">
+    <div className="bg-background border border-border rounded-2xl p-4 flex flex-col justify-between">
       {/* Title */}
       <h2 className="text-right font-semibold text-gray-800">{title}</h2>
 

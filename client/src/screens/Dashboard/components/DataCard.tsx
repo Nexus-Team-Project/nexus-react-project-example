@@ -10,17 +10,15 @@ function DataCard({ image, children, className }: DataCardProps) {
   return (
     <div
       className={cn(
-        "bg-secondary rounded-2xl p-4 grid grid-cols-[1fr_1fr] items-center w-full h-[135px]",
+        "bg-secondary rounded-2xl p-4 grid grid-cols-[auto_1fr] gap-6 items-center w-full",
         className
       )}
     >
-      {/* Left side - chart/icon */}
-      <div className="flex justify-center items-center h-full">
-        <img src={image} alt="notification" />
-      </div>
-
       {/* Right side - texts */}
       {children}
+
+      {/* Left side - chart/icon */}
+      <img src={image} alt="notification" />
     </div>
   );
 }

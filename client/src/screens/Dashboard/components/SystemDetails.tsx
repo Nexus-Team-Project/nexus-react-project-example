@@ -23,7 +23,18 @@ export const options = {
 
 function SystemDetails() {
   return (
-    <div className="w-full grid grid-cols-2 gap-4 p-6 border border-border rounded-md">
+    //border border-border
+    <div className="w-full grid grid-cols-2 gap-4 p-6 rounded-md shadow-sm shadow-secondary-foreground">
+      {/* Right Section */}
+      <div className="bg-white rounded-2xl p-4 shadow">
+        <div id="table-top" className="flex items-center justify-between">
+          <h2 className="font-semibold text-right mb-4">דוח מערכת</h2>
+          <Button variant="secondary">מעבר לעמוד</Button>
+        </div>
+        {/* table placeholder */}
+        <SystemTable />
+      </div>
+
       {/* Left Section */}
       <div className="grid grid-cols-2 gap-4">
         {/* Top row */}
@@ -95,16 +106,6 @@ function SystemDetails() {
             <p className="text-black text-3xl font-bold">300</p>
           </div>
         </div>
-      </div>
-
-      {/* Right Section */}
-      <div className="bg-white rounded-2xl p-4 shadow">
-        <div id="table-top" className="flex items-center justify-between">
-          <Button variant="secondary">מעבר לעמוד</Button>
-          <h2 className="font-semibold text-right mb-4">דוח מערכת</h2>{" "}
-        </div>
-        {/* table placeholder */}
-        <SystemTable />
       </div>
     </div>
   );
