@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OfferType {
+  Link
+  Registration_Service
+  Coupon
+  ContactMe
+  Purchase
+}
+
+enum OfferStatus {
+  active
+  inactive
+  demo
+}
+
+enum MerchantStatus {
+  pending
+  active
+  suspended
+  inactive
+}
+
+enum PaymeStatus {
+  pending
+  approved
+  rejected
+}
+
+enum KycStatus {
+  not_started
+  in_progress
+  approved
+  rejected
+}
+
+enum TenantStatus {
+  active
+  inactive
+  pending
+}
+
+model Tenant {
+  id                  String   @id @default(uuid()) @db.Uuid
+  tenant_id           String?
+  name   String
+  type   String?
+  title               String?
+  image               String?
+
+  contact_first_name  String?
+  contact_last_name   String?
+  email               String?
+  phone               String?
+  status              String?
+  join_date           DateTime? @default(now()) @db.Date
+  official_site_url   String?
+  newsletter_status   Boolean?
+  official_sign_up    String?
+  official_login      String?
+  report_email         String?
+
+  offers TenantsOffers[]
+  excludedOffers OfferExcludedTenants[]
+  @@map("Tenants")
+}
+
+model Merchant {
+  id               String       @id @default(uuid()) @db.Uuid
+  business_name             String   
+  contact_name              String  
+  email                     String    
+  phone                     String   
+  address                   String?   
+  city                      String?  
+  business_category         String?   
+  business_registration_number String 
+  business_type             String    
+  vat_number                String?   
+  website_url               String?   
+  bank_name                 String    
+  bank_branch               String    
+  bank_account              String    
+  bank_account_holder       String    
+  commission_rate           Decimal   
+  payment_terms             String?   
+  status                    MerchantStatus @default(pending)
+  join_date                 DateTime  @default(now())
+  approval_date             DateTime?
+
+  payme_seller_id           String?   
+  payme_api_key             String?   
+  payme_status              PaymeStatus?
+  kyc_status                KycStatus @default(not_started)
+  documents_uploaded        Json?
+  notes                     String?  
+
+  offers MerchantsOffers[]
+
+  @@map("Merchants")
+}
+
+model MerchantsOffers {
+  id            String   @id @default(uuid()) @db.Uuid
+  merchant   Merchant? @relation(fields: [merchant_id], references: [id])
+  merchant_id         String? @db.Uuid
+
+  status            OfferStatus @default(active)
+  title               String  
+  subtitle             String?
+  description         String?
+  images           String?  
+  type          OfferType?
+  category            String?
+  expiration_date         DateTime?
+  created_date        DateTime @default(now())
+  updated_date        DateTime? @updatedAt
+  excludedTenantsCol  String? // Comma-separated list of tenant IDs to exclude
+
+  tenants TenantsOffers[]
+  excludedTenants OfferExcludedTenants[]
+
+  @@map("MerchantsOffers")
+}
+
+model TenantsOffers {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenant       Tenant?     @relation(fields: [tenant_id], references: [id])
+  tenant_id         String? @db.Uuid
+  offer       MerchantsOffers? @relation(fields: [offer_id], references: [id])
+  offer_id         String? @db.Uuid
+  tenant_price        Decimal?
+  
+
+  @@unique([tenant_id, offer_id]) // prevents duplicate mapping
+  
+
+
+  @@map("TenantsOffers")
+}
+
+model OfferExcludedTenants {
+  offer       MerchantsOffers     @relation(fields: [offerId], references: [id])
+  offerId  String @db.Uuid
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  tenantId String @db.Uuid
+
+  @@id([offerId, tenantId])
+}
