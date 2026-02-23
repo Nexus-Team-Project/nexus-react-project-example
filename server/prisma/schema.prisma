@@ -46,6 +46,14 @@ enum TenantStatus {
   pending
 }
 
+enum PurchaseStatus {
+  pending
+  completed
+  failed
+  refunded
+  cancelled
+}
+
 model Tenant {
   id                  String   @id @default(uuid()) @db.Uuid
   tenant_id           String?
@@ -121,10 +129,12 @@ model MerchantsOffers {
   expiration_date         DateTime?
   created_date        DateTime @default(now())
   updated_date        DateTime? @updatedAt
+  available_quantity  Int?      @default(0)
   excludedTenantsCol  String? // Comma-separated list of tenant IDs to exclude
 
   tenants TenantsOffers[]
   excludedTenants OfferExcludedTenants[]
+  purchases Purchase[]
 
   @@map("MerchantsOffers")
 }
@@ -152,4 +162,39 @@ model OfferExcludedTenants {
   tenantId String @db.Uuid
 
   @@id([offerId, tenantId])
+}
+
+model Purchase {
+  id                String         @id @default(uuid()) @db.Uuid
+
+  // Relations
+  offer             MerchantsOffers? @relation(fields: [offer_id], references: [id])
+  offer_id          String?        @db.Uuid
+  tenant_id         String?       
+
+  // Buyer info
+  buyer_name        String
+  buyer_email       String
+  buyer_phone       String?
+
+  // Sale details
+  amount            Decimal
+  currency          String         @default("ILS")
+
+  // PayMe data
+  transaction_id    String         @unique  // UUID we generated
+  payme_sale_id     String?        // returned by PayMe
+  payme_sale_code   Int?           // returned by PayMe
+  sale_url          String?        // iframe payment URL
+
+  // Status
+  status            PurchaseStatus @default(pending)
+
+  // Receipt details
+  receipt_details   Json?
+
+  created_at        DateTime       @default(now())
+  updated_at        DateTime?      @updatedAt
+
+  @@map("Purchases")
 }
