@@ -1,18 +1,22 @@
 import prisma from "../prisma";
 import { PurchaseRequestData } from "./validation";
 import { PaymeSaleResponse } from "./service";
+import { UUID } from "crypto";
+
+export const findUserByEmail = async (email: string) => {
+  return await prisma.user.findUnique({ where: { email } });
+};
 
 export const savePurchase = async (
   data: PurchaseRequestData,
   payme: PaymeSaleResponse,
+  userId: string,
 ) => {
   return await prisma.purchase.create({
     data: {
       offer_id: data.offerId,
+      user_id: userId,
       tenant_id: data.tenantId,
-      buyer_name: data.buyer_name,
-      buyer_email: data.buyer_email,
-      buyer_phone: data.buyer_phone,
       amount: data.amount,
       transaction_id: payme.transaction_id,
       payme_sale_id: payme.payme_sale_id,
