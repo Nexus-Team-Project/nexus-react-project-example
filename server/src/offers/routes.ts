@@ -1,10 +1,7 @@
 // routes/offers.ts
 import { Router, Request, Response } from "express";
 import { validateOfferRequest } from "../offers/validation";
-import {
-  getTenantUsedOffers,
-  getTenantAvailableOffers,
-} from "../offers/routesLogic";
+import { getTenantAvailableOffers, getTenantUsedOffers } from "./repository";
 
 const router = Router();
 
