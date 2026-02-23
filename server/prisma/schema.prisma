@@ -76,6 +76,7 @@ model Tenant {
 
   offers TenantsOffers[]
   excludedOffers OfferExcludedTenants[]
+  users User[]
   @@map("Tenants")
 }
 
@@ -135,8 +136,36 @@ model MerchantsOffers {
   tenants TenantsOffers[]
   excludedTenants OfferExcludedTenants[]
   purchases Purchase[]
+  subOffers SubOffer[]
 
   @@map("MerchantsOffers")
+}
+
+model SubOffer {
+  id       String          @id @default(uuid()) @db.Uuid
+  offer    MerchantsOffers @relation(fields: [offer_id], references: [id])
+  offer_id String          @db.Uuid
+
+  title    String
+  summary  String?
+  images   String[]
+  terms    String?
+
+  costOptions CostOption[]
+
+  @@map("SubOffers")
+}
+
+model CostOption {
+  id           String   @id @default(uuid()) @db.Uuid
+  subOffer     SubOffer @relation(fields: [sub_offer_id], references: [id])
+  sub_offer_id String   @db.Uuid
+
+  type      String
+  cost      Decimal
+  available Int?
+
+  @@map("CostOptions")
 }
 
 model TenantsOffers {
@@ -164,18 +193,28 @@ model OfferExcludedTenants {
   @@id([offerId, tenantId])
 }
 
+model User {
+  id        String  @id @default(uuid()) @db.Uuid
+  name      String
+  email     String  @unique
+  phone     String?
+  tenant    Tenant? @relation(fields: [tenant_id], references: [id])
+  tenant_id String? @db.Uuid
+
+  purchases Purchase[]
+
+  @@map("Users")
+}
+
 model Purchase {
   id                String         @id @default(uuid()) @db.Uuid
 
   // Relations
   offer             MerchantsOffers? @relation(fields: [offer_id], references: [id])
   offer_id          String?        @db.Uuid
-  tenant_id         String?       
-
-  // Buyer info
-  buyer_name        String
-  buyer_email       String
-  buyer_phone       String?
+  user              User?          @relation(fields: [user_id], references: [id])
+  user_id           String?        @db.Uuid
+  tenant_id         String?
 
   // Sale details
   amount            Decimal
