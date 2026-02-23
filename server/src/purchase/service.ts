@@ -1,8 +1,9 @@
 import crypto from "crypto";
 import { AppError } from "../errors/AppError";
-import { getOffer, savePurchase } from "./repository";
+import { findUserByEmail, getOffer, savePurchase } from "./repository";
 import { PurchaseRequestData } from "./validation";
 import axios from "axios";
+import logger from "../logger";
 
 type Offer = NonNullable<Awaited<ReturnType<typeof getOffer>>>;
 
@@ -17,9 +18,9 @@ export type PaymeSaleResponse = {
 };
 
 async function fetchOffer(offerId: string): Promise<Offer> {
-  console.log(`[fetchOffer] ${offerId}`);
   const offer = await getOffer(offerId);
   if (!offer) {
+    logger.warn("Offer not found", { offerId });
     throw new AppError(
       404,
       "OFFER_NOT_FOUND",
@@ -33,6 +34,7 @@ async function fetchOffer(offerId: string): Promise<Offer> {
     offer.available_quantity > 0;
 
   if (!isAvailable) {
+    logger.warn("Offer not available", { offerId, status: offer.status, available_quantity: offer.available_quantity });
     throw new AppError(
       409,
       "NO_AVAILABILITY",
@@ -48,14 +50,13 @@ async function createPaymeSale(
   data: PurchaseRequestData,
 ): Promise<PaymeSaleResponse> {
   const { merchant } = offer;
-  console.log(`[createPaymeSale] ${offer.title}`);
-  console.log({ paymeId: process.env.PAYME_ID });
 
   if (
     // !merchant?.payme_seller_id ||
     // !merchant?.payme_api_key ||
     !process.env.PAYME_ID
   ) {
+    logger.error("PayMe not configured — PAYME_ID env var missing");
     throw new AppError(
       500,
       "MERCHANT_PAYME_NOT_CONFIGURED",
@@ -93,6 +94,7 @@ async function createPaymeSale(
 
   const apiUrl = process.env.PAYME_API_URL;
   if (!apiUrl) {
+    logger.error("PAYME_API_URL env variable is not set");
     throw new AppError(
       500,
       "PAYME_URL_NOT_CONFIGURED",
@@ -105,6 +107,7 @@ async function createPaymeSale(
   });
 
   if (!response.data || response.status !== 200) {
+    logger.error("PayMe API returned unexpected response", { status: response.status, data: response.data });
     throw new AppError(
       502,
       "PAYME_API_ERROR",
@@ -115,6 +118,7 @@ async function createPaymeSale(
   const result = response.data as PaymeSaleResponse;
 
   if (result.status_code !== 0) {
+    logger.error("PayMe rejected the sale request", { result });
     throw new AppError(
       502,
       "PAYME_SALE_FAILED",
@@ -129,9 +133,16 @@ async function createPaymeSale(
 export async function createPurchase(
   data: PurchaseRequestData,
 ): Promise<PaymeSaleResponse> {
-  console.log("Im here on the createPurchase function");
+  logger.info("Creating purchase", { offerId: data.offerId, tenantId: data.tenantId, email: data.buyer_email });
   const offer = await fetchOffer(data.offerId);
   const payme = await createPaymeSale(offer, data);
-  await savePurchase(data, payme);
+  //Finds user by email on users table and connect it to purchase on db.
+  const user = await findUserByEmail(data.buyer_email);
+  if (!user) {
+    logger.warn("User not found during purchase", { email: data.buyer_email });
+    throw new AppError(401, "USER_NOT_FOUND", "User not found");
+  }
+  await savePurchase(data, payme, user.id);
+  logger.info("Purchase created successfully", { offerId: data.offerId, transactionId: payme.transaction_id });
   return payme;
 }
