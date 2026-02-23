@@ -2,8 +2,10 @@ import express from "express";
 import tenantsRouter from "./tenants/routes";
 import offersRouter from "./offers/routes";
 import purchaseRouter from "./purchase/routes";
+import usersRouter from "./users/routes";
 import { authMiddleware } from "./middlewares/authorization";
 import { errorHandler } from "./middlewares/errorHandler";
+import logger from "./logger";
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -16,13 +18,25 @@ app.use(authMiddleware);
 app.use("/tenants", tenantsRouter);
 app.use("/offers", offersRouter);
 app.use("/purchase", purchaseRouter);
+app.use("/users", usersRouter);
 
 // Global error handler — must be registered after all routes
 app.use(errorHandler);
 
 const server = app.listen(port, (error) => {
   if (error) {
-    console.error("Failed to start server:", error);
+    logger.error("Failed to start server", { error });
+    return;
   }
-  console.log(`Server running at http://localhost:${port}`);
+  logger.info(`Server running at http://localhost:${port}`);
+});
+
+process.on("uncaughtException", (err) => {
+  logger.error("Uncaught exception — shutting down", { stack: err.stack, message: err.message });
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.error("Unhandled promise rejection", { reason });
+  process.exit(1);
 });
