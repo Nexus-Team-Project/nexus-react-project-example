@@ -48,9 +48,11 @@ enum TenantStatus {
 
 enum PurchaseStatus {
   pending
+  authorized
   completed
   failed
   refunded
+  chargebacked
   cancelled
 }
 
@@ -221,10 +223,11 @@ model Purchase {
   currency          String         @default("ILS")
 
   // PayMe data
-  transaction_id    String         @unique  // UUID we generated
-  payme_sale_id     String?        // returned by PayMe
-  payme_sale_code   Int?           // returned by PayMe
-  sale_url          String?        // iframe payment URL
+  transaction_id      String         @unique  // UUID we generated
+  payme_sale_id       String?        // returned by PayMe on sale creation
+  payme_sale_code     Int?           // returned by PayMe on sale creation
+  payme_transaction_id String?       // returned by PayMe on callback
+  sale_url            String?        // iframe payment URL
 
   // Status
   status            PurchaseStatus @default(pending)

@@ -2,6 +2,7 @@ import express from "express";
 import tenantsRouter from "./tenants/routes";
 import offersRouter from "./offers/routes";
 import purchaseRouter from "./purchase/routes";
+import purchaseCallbackRouter from "./purchase/callbackRoutes";
 import usersRouter from "./users/routes";
 import { authMiddleware } from "./middlewares/authorization";
 import { errorHandler } from "./middlewares/errorHandler";
@@ -12,9 +13,14 @@ const port = process.env.PORT || 8080;
 
 // Middleware
 app.use(express.json());
+
+// Public routes — registered before authMiddleware so PayMe can POST without a Bearer token
+app.use("/purchase/callback", purchaseCallbackRouter);
+
+// Auth middleware — protects all routes below
 app.use(authMiddleware);
 
-// Routes
+// Protected routes
 app.use("/tenants", tenantsRouter);
 app.use("/offers", offersRouter);
 app.use("/purchase", purchaseRouter);

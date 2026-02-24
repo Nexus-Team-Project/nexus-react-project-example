@@ -34,7 +34,11 @@ async function fetchOffer(offerId: string): Promise<Offer> {
     offer.available_quantity > 0;
 
   if (!isAvailable) {
-    logger.warn("Offer not available", { offerId, status: offer.status, available_quantity: offer.available_quantity });
+    logger.warn("Offer not available", {
+      offerId,
+      status: offer.status,
+      available_quantity: offer.available_quantity,
+    });
     throw new AppError(
       409,
       "NO_AVAILABILITY",
@@ -75,7 +79,7 @@ async function createPaymeSale(
     installments: "1",
     market_fee: 0,
     sale_send_notification: true,
-    // sale_callback_url: process.env.PAYME_SALE_CALLBACK_URL,
+    sale_callback_url: "https://nexus-online.net/_functions/purchaseCallback", //process.env.PAYME_SALE_CALLBACK_URL,
     sale_email: data.email,
     // sale_return_url: process.env.PAYME_SALE_RETURN_URL, //Redirect to this URL after payment success (optional)
     sale_name: data.buyer_name,
@@ -107,7 +111,10 @@ async function createPaymeSale(
   });
 
   if (!response.data || response.status !== 200) {
-    logger.error("PayMe API returned unexpected response", { status: response.status, data: response.data });
+    logger.error("PayMe API returned unexpected response", {
+      status: response.status,
+      data: response.data,
+    });
     throw new AppError(
       502,
       "PAYME_API_ERROR",
@@ -133,7 +140,11 @@ async function createPaymeSale(
 export async function createPurchase(
   data: PurchaseRequestData,
 ): Promise<PaymeSaleResponse> {
-  logger.info("Creating purchase", { offerId: data.offerId, tenantId: data.tenantId, email: data.buyer_email });
+  logger.info("Creating purchase", {
+    offerId: data.offerId,
+    tenantId: data.tenantId,
+    email: data.buyer_email,
+  });
   const offer = await fetchOffer(data.offerId);
   const payme = await createPaymeSale(offer, data);
   //Finds user by email on users table and connect it to purchase on db.
@@ -143,6 +154,9 @@ export async function createPurchase(
     throw new AppError(401, "USER_NOT_FOUND", "User not found");
   }
   await savePurchase(data, payme, user.id);
-  logger.info("Purchase created successfully", { offerId: data.offerId, transactionId: payme.transaction_id });
+  logger.info("Purchase created successfully", {
+    offerId: data.offerId,
+    transactionId: payme.transaction_id,
+  });
   return payme;
 }
