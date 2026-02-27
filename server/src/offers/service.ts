@@ -3,7 +3,7 @@ import { PriceModifiers } from "@prisma/client";
 import { AppError } from "../errors/AppError";
 import logger from "../logger";
 import { CreateOfferInput } from "./validation";
-import { createOfferWithVariants } from "./repository";
+import { createOfferWithVariants, getOffer } from "./repository";
 
 type PriceEntry = { priceModifier: PriceModifiers; priceValue: number };
 
@@ -116,4 +116,58 @@ export async function createOffer(data: CreateOfferInput) {
   });
 
   return { offer, variants };
+}
+
+type OfferData = NonNullable<Awaited<ReturnType<typeof getOffer>>>;
+
+export async function fetchOffer(offerId: string): Promise<OfferData> {
+  const offer = await getOffer(offerId);
+  if (!offer) {
+    logger.warn("Offer not found", { offerId });
+    throw new AppError(
+      404,
+      "OFFER_NOT_FOUND",
+      "The requested offer does not exist",
+    );
+  }
+  validateOffer(offer, offerId);
+  return offer;
+}
+
+// Validates offer availability and type-specific rules.
+// Throws AppError if the offer cannot be purchased.
+export function validateOffer(offer: OfferData, offerId: string): void {
+  if (offer.status !== "active") {
+    logger.warn("Offer not active", { offerId, status: offer.status });
+    throw new AppError(
+      409,
+      "NO_AVAILABILITY",
+      "The requested offer is no longer available",
+    );
+  }
+
+  if (offer.available_quantity === null || offer.available_quantity <= 0) {
+    logger.warn("Offer out of stock", {
+      offerId,
+      available_quantity: offer.available_quantity,
+    });
+    throw new AppError(
+      409,
+      "NO_AVAILABILITY",
+      "The requested offer is no longer available",
+    );
+  }
+
+  // Coupon offers have a hard expiration date on the offer itself
+  if (
+    offer.type === "Coupon" &&
+    offer.expiration_date &&
+    offer.expiration_date < new Date()
+  ) {
+    logger.warn("Coupon offer has expired", {
+      offerId,
+      expiration_date: offer.expiration_date,
+    });
+    throw new AppError(409, "OFFER_EXPIRED", "This offer has expired");
+  }
 }
