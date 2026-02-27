@@ -233,3 +233,52 @@ export function getTenantAvailableOffers(
     },
   });
 }
+
+export const getOffer = async (offerId: string) => {
+  return await prisma.merchantsOffers.findUnique({
+    where: { id: offerId },
+    select: {
+      status: true,
+      available_quantity: true,
+      title: true,
+      type: true,
+      time_limit: true,
+      expiration_date: true,
+      merchant: {
+        select: {
+          payme_seller_id: true,
+          payme_api_key: true,
+          commission_rate: true,
+        },
+      },
+    },
+  });
+};
+
+export const getOfferVariant = async (offerVariantId: string) => {
+  return await prisma.offerVariant.findUnique({
+    where: { id: offerVariantId },
+    select: {
+      id: true,
+      title: true,
+      offerId: true,
+      offer: {
+        select: {
+          status: true,
+          available_quantity: true,
+          title: true,
+          type: true,
+          time_limit: true,
+          expiration_date: true,
+          merchant: {
+            select: {
+              payme_seller_id: true,
+              payme_api_key: true,
+              commission_rate: true,
+            },
+          },
+        },
+      },
+    },
+  });
+};
