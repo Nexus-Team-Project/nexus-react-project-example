@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { PurchaseStatus } from "@prisma/client";
 import logger from "../logger";
 import { updatePurchaseByCallback } from "./repository";
+import { claimCouponForPurchase } from "../coupons/service";
 
 const router = Router();
 
@@ -111,8 +112,18 @@ router.post("/", async (req: Request, res: Response) => {
       notify_type: body.notify_type,
       attempted_status: newStatus,
     });
-    // Return 200 to prevent PayMe from retrying endlessly for DB errors.
-    // The error is captured in logs and the error.log file for monitoring.
+  }
+
+  // On confirmed payment: claim a coupon and send it to the buyer.
+  if (newStatus === "completed" && body.buyer_email) {
+    claimCouponForPurchase(body.transaction_id, body.buyer_email).catch(
+      (err) => {
+        logger.error("claimCouponForPurchase threw unexpectedly", {
+          transaction_id: body.transaction_id,
+          error: err instanceof Error ? err.message : err,
+        });
+      },
+    );
   }
 
   res.status(200).json({ status_code: 0 });
