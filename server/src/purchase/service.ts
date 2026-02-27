@@ -1,11 +1,13 @@
 import crypto from "crypto";
 import { AppError } from "../errors/AppError";
-import { findUserByEmail, getOffer, savePurchase } from "./repository";
+import { findUserByEmail, savePurchase } from "./repository";
 import { PurchaseRequestData } from "./validation";
 import axios from "axios";
 import logger from "../logger";
+import { getOffer, getOfferVariant } from "../offers/repository";
+import { fetchOffer, validateOffer } from "../offers/service";
 
-type Offer = NonNullable<Awaited<ReturnType<typeof getOffer>>>;
+type OfferData = NonNullable<Awaited<ReturnType<typeof getOffer>>>;
 
 export type PaymeSaleResponse = {
   status_code: number;
@@ -17,49 +19,31 @@ export type PaymeSaleResponse = {
   currency: string;
 };
 
-async function fetchOffer(offerId: string): Promise<Offer> {
-  const offer = await getOffer(offerId);
-  if (!offer) {
-    logger.warn("Offer not found", { offerId });
-    throw new AppError(
-      404,
-      "OFFER_NOT_FOUND",
-      "The requested offer does not exist",
-    );
+// Computes the expiration date for this specific purchase based on offer type.
+// Voucher: created_at + time_limit (days)
+// Coupon:  offer.expiration_date (shared deadline)
+// Other:   null
+function computeExpirationDate(
+  offer: OfferData,
+  purchaseCreatedAt: Date,
+): Date | null {
+  if (offer.type === "Voucher" && offer.time_limit) {
+    const expiration = new Date(purchaseCreatedAt);
+    expiration.setDate(expiration.getDate() + offer.time_limit);
+    return expiration;
   }
-
-  const isAvailable =
-    offer.status === "active" &&
-    offer.available_quantity !== null &&
-    offer.available_quantity > 0;
-
-  if (!isAvailable) {
-    logger.warn("Offer not available", {
-      offerId,
-      status: offer.status,
-      available_quantity: offer.available_quantity,
-    });
-    throw new AppError(
-      409,
-      "NO_AVAILABILITY",
-      "The requested offer is no longer available",
-    );
+  if (offer.type === "Coupon") {
+    return offer.expiration_date;
   }
-
-  return offer;
+  return null;
 }
 
 async function createPaymeSale(
-  offer: Offer,
+  offer: OfferData,
   data: PurchaseRequestData,
+  productName: string,
 ): Promise<PaymeSaleResponse> {
-  const { merchant } = offer;
-
-  if (
-    // !merchant?.payme_seller_id ||
-    // !merchant?.payme_api_key ||
-    !process.env.PAYME_ID
-  ) {
+  if (!process.env.PAYME_ID) {
     logger.error("PayMe not configured — PAYME_ID env var missing");
     throw new AppError(
       500,
@@ -74,7 +58,7 @@ async function createPaymeSale(
     seller_payme_id: "MPL17706-31740YWY-3LV0PBFM-KB8UOOGY",
     sale_price: data.amount,
     currency: "ILS",
-    product_name: offer.title,
+    product_name: productName,
     transaction_id: transactionId,
     installments: "1",
     market_fee: 0,
@@ -96,7 +80,7 @@ async function createPaymeSale(
     body.sale_mobile = data.buyer_phone;
   }
 
-  const apiUrl = process.env.PAYME_API_URL;
+  const apiUrl = process.env.PAYME_API_URL_DEV;
   if (!apiUrl) {
     logger.error("PAYME_API_URL env variable is not set");
     throw new AppError(
@@ -142,21 +126,71 @@ export async function createPurchase(
 ): Promise<PaymeSaleResponse> {
   logger.info("Creating purchase", {
     offerId: data.offerId,
+    offerVariantId: data.offerVariantId,
     tenantId: data.tenantId,
     email: data.buyer_email,
   });
-  const offer = await fetchOffer(data.offerId);
-  const payme = await createPaymeSale(offer, data);
+
+  let offer: OfferData;
+  let offerId: string;
+  let offerVariantId: string | undefined;
+  let productName: string;
+
+  if (data.offerVariantId) {
+    // OfferVariant flow: resolve the parent offer through the variant relation
+    const offerVariant = await getOfferVariant(data.offerVariantId);
+    if (!offerVariant) {
+      logger.warn("OfferVariant not found", {
+        offerVariantId: data.offerVariantId,
+      });
+      throw new AppError(
+        404,
+        "OFFER_VARIANT_NOT_FOUND",
+        "The requested offer variant does not exist",
+      );
+    }
+    offer = offerVariant.offer;
+    offerId = offerVariant.offerId;
+    offerVariantId = offerVariant.id;
+    productName = offerVariant.title ?? offer.title;
+    validateOffer(offer, offerId);
+    logger.info("OfferVariant resolved to offer", {
+      offerVariantId,
+      offerId,
+      offerType: offer.type,
+    });
+  } else {
+    // Direct offer flow
+    offerId = data.offerId!;
+    offer = await fetchOffer(offerId);
+    productName = offer.title;
+  }
+
+  const payme = await createPaymeSale(offer, data, productName);
+
   //Finds user by email on users table and connect it to purchase on db.
   const user = await findUserByEmail(data.buyer_email);
   if (!user) {
     logger.warn("User not found during purchase", { email: data.buyer_email });
     throw new AppError(401, "USER_NOT_FOUND", "User not found");
   }
-  await savePurchase(data, payme, user.id);
+
+  const purchaseCreatedAt = new Date();
+  const expiration_date = computeExpirationDate(offer, purchaseCreatedAt);
+
+  await savePurchase(data, payme, user.id, {
+    offerId,
+    offerVariantId,
+    expiration_date,
+  });
+
   logger.info("Purchase created successfully", {
-    offerId: data.offerId,
+    offerId,
+    offerVariantId,
+    offerType: offer.type,
+    expiration_date,
     transactionId: payme.transaction_id,
   });
+
   return payme;
 }
