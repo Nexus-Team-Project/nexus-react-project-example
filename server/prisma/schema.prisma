@@ -6,21 +6,7 @@ datasource db {
   provider = "postgresql"
 }
 
-
-enum PriceModifiers {
-  addition
-  multiplication
-}
-
-  enum VariantsType {
-    color
-    size
-    material
-    style
-    other
-    denomination
-    discount
-  }
+// ─── Enums ────────────────────────────────────────────────────────────────────
 
 enum OfferType {
   Link
@@ -73,67 +59,71 @@ enum PurchaseStatus {
   cancelled
 }
 
-enum CouponStatus {
+enum VoucherCodeStatus {
   available
+  issued
   used
+  expired
+  cancelled
 }
 
+// ─── Models ───────────────────────────────────────────────────────────────────
+
 model Tenant {
-  id                  String   @id @default(uuid()) @db.Uuid
-  tenant_id           String?
-  name   String
-  type   String?
-  title               String?
-  image               String?
+  id                 String    @id @default(uuid()) @db.Uuid
+  tenant_id          String?
+  name               String
+  type               String?
+  title              String?
+  image              String?
+  contact_first_name String?
+  contact_last_name  String?
+  email              String?
+  phone              String?
+  status             String?
+  join_date          DateTime? @default(now()) @db.Date
+  official_site_url  String?
+  newsletter_status  Boolean?
+  official_sign_up   String?
+  official_login     String?
+  report_email       String?
 
-  contact_first_name  String?
-  contact_last_name   String?
-  email               String?
-  phone               String?
-  status              String?
-  join_date           DateTime? @default(now()) @db.Date
-  official_site_url   String?
-  newsletter_status   Boolean?
-  official_sign_up    String?
-  official_login      String?
-  report_email         String?
-
-  offers TenantsOffers[]
+  users          User[]
+  tenantOffers   TenantOffer[]
   excludedOffers OfferExcludedTenants[]
-  users User[]
-  coupons Coupon[]
+  purchases      Purchase[]
+
   @@map("Tenants")
 }
 
 model Merchant {
-  id               String       @id @default(uuid()) @db.Uuid
-  business_name             String   
-  contact_name              String  
-  email                     String    
-  phone                     String   
-  address                   String?   
-  city                      String?  
-  business_category         String?   
-  business_registration_number String 
-  business_type             String    
-  vat_number                String?   
-  website_url               String?   
-  bank_name                 String    
-  bank_branch               String    
-  bank_account              String    
-  bank_account_holder       String    
-  commission_rate           Decimal   
-  payment_terms             String?   
-  status                    MerchantStatus @default(pending)
-  join_date                 DateTime  @default(now())
-  approval_date             DateTime?
-
-  payme_seller_id           String?   
-  payme_api_key             String?   
-  payme_status              PaymeStatus?
-  kyc_status                KycStatus @default(not_started)
-  documents_uploaded        Json?
-  notes                     String?  
+  id                           String         @id @default(uuid()) @db.Uuid
+  business_name                String
+  contact_name                 String
+  email                        String
+  phone                        String
+  address                      String?
+  city                         String?
+  business_category            String?
+  business_registration_number String
+  business_type                String
+  vat_number                   String?
+  website_url                  String?
+  bank_name                    String
+  bank_branch                  String
+  bank_account                 String
+  bank_account_holder          String
+  commission_rate              Decimal
+  payment_terms                String?
+  status                       MerchantStatus @default(pending)
+  join_date                    DateTime       @default(now())
+  approval_date                DateTime?
+  payme_seller_id              String?
+  payme_api_key                String?
+  payme_status                 PaymeStatus?
+  kyc_status                   KycStatus      @default(not_started)
+  documents_uploaded           Json?
+  notes                        String?
 
   offers MerchantsOffers[]
 
@@ -141,122 +131,136 @@ model Merchant {
 }
 
 model MerchantsOffers {
-  id            String   @id @default(uuid()) @db.Uuid
-  merchant   Merchant? @relation(fields: [merchant_id], references: [id])
-  merchant_id         String? @db.Uuid
+  id                 String      @id @default(uuid()) @db.Uuid
+  merchant_id        String?     @db.Uuid
+  merchant           Merchant?   @relation(fields: [merchant_id], references: [id])
+  status             OfferStatus @default(active)
+  title              String
+  subtitle           String?
+  description        String?
+  images             String?
+  type               OfferType?
+  category           String?
+  time_limit         Int? // in days; used for Voucher offers to compute per-purchase expiration
+  excludedTenantsCol String?
+  expiration_date    DateTime?
+  created_date       DateTime    @default(now())
+  updated_date       DateTime?   @updatedAt
 
-  base_price          Decimal?
-  status            OfferStatus @default(active)
-  title               String  
-  subtitle             String?
-  description         String?
-  images           String?  
-  type          OfferType?
-  category            String?
-  available_quantity  Int?      @default(0)
-  time_limit          Int?      // in days; used for Voucher offers to compute per-purchase expiration
-  excludedTenantsCol  String? // Comma-separated list of tenant IDs to exclude
-  expiration_date         DateTime?
-  created_date        DateTime @default(now())
-  updated_date        DateTime? @updatedAt
-
-  options       VariantOption[]
-  tenants TenantsOffers[]
+  options         OfferOption[]
+  variants        OfferVariant[]
+  tenantOffers    TenantOffer[]
   excludedTenants OfferExcludedTenants[]
-  purchases Purchase[]
-  OfferVariants  OfferVariant[]
-  coupons Coupon[]
+  purchases       Purchase[]
 
   @@map("MerchantsOffers")
 }
 
-model VariantOption {
-  id        String   @id @default(uuid()) @db.Uuid
-  offerId   String   @db.Uuid
-  offer     MerchantsOffers    @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  name      String
-  values    VariantOptionValue[]
+// One row per option axis (e.g. "Color", "Size").
+// values is a JSON array of the available choices: ["Red","Blue"] or [100,200,300].
+model OfferOption {
+  id          String          @id @default(uuid()) @db.Uuid
+  offer_id    String          @db.Uuid
+  offer       MerchantsOffers @relation(fields: [offer_id], references: [id], onDelete: Cascade)
+  option_name String
+  option_type String          @default("text")
+  values      Json // string[] | number[]
 
-  @@unique([offerId, name])
+  @@unique([offer_id, option_name])
+  @@index([offer_id])
+  @@map("OfferOptions")
 }
 
-model VariantOptionValue {
-  id        String   @id @default(uuid()) @db.Uuid
-  optionId  String   @db.Uuid
-  option    VariantOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
-
-  value     String
-
-  priceModifier  PriceModifiers
-  priceValue Decimal   // e.g., +10, -5, 15%
-
-  variantConnections OfferVariantValue[]
-
-  @@index([optionId])
-}
-
+// The purchasable SKU, generated from the Cartesian product of OfferOption.values.
+// combination stores the defining key-value pairs, e.g. {"Color":"Red","Size":"L"} or {} for no-option offers.
 model OfferVariant {
-  id            String   @id @default(uuid()) @db.Uuid
-
-  offerId       String   @db.Uuid
-  offer         MerchantsOffers    @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  sku           String   @unique
-  barcode       String?  @unique
+  id             String          @id @default(uuid()) @db.Uuid
+  offer_id       String          @db.Uuid
+  offer          MerchantsOffers @relation(fields: [offer_id], references: [id], onDelete: Cascade)
+  sku            String          @unique
   stock_quantity Int
-  price Decimal
-  title         String?
-  summary      String?
-  terms         String?
-  images String[]
+  price          Decimal
+  combination    Json // e.g. {"Color":"Red","CouponValue":100} or {}
+  summary        String?
+  terms          String?
+  images         String[]
+  isActive       Boolean         @default(false)
+  created_at     DateTime        @default(now())
+  updated_at     DateTime        @updatedAt
 
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  voucherAdmin VoucherAdmin?
+  voucherCodes VoucherCode[]
+  tenantOffers TenantOffer[]
+  purchases    Purchase[]
 
-  values        OfferVariantValue[]
-    tenantsOffers TenantsOffers[]
-  purchases     Purchase[]
-  coupons       Coupon[]
-
-  @@index([offerId])
+  @@index([offer_id])
+  @@map("OfferVariants")
 }
 
-model OfferVariantValue {
-  variantId String @db.Uuid
-  valueId   String @db.Uuid
+// Merchant-facing financial breakdown — 1-to-1 with OfferVariant, Voucher offers only.
+model VoucherAdmin {
+  id               String       @id @default(uuid()) @db.Uuid
+  variant_id       String       @unique @db.Uuid
+  variant          OfferVariant @relation(fields: [variant_id], references: [id], onDelete: Cascade)
+  sku              String // denormalized for fast lookup
+  cost             Decimal
+  price            Decimal
+  settlement_terms String?
 
-  variant   OfferVariant       @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  value     VariantOptionValue @relation(fields: [valueId], references: [id], onDelete: Cascade)
-
-  @@id([variantId, valueId])
+  @@map("VoucherAdmins")
 }
 
+// One row per physical redeemable code.
+// Stock level = COUNT(*) WHERE sku = ? AND status = 'available'
+model VoucherCode {
+  id             String            @id @default(uuid()) @db.Uuid
+  variant_id     String            @db.Uuid
+  variant        OfferVariant      @relation(fields: [variant_id], references: [id], onDelete: Cascade)
+  sku            String // denormalized for fast lookup
+  batch_id       String?
+  barcode        String?
+  barcode_image  String?
+  status         VoucherCodeStatus @default(available)
+  issued_date    DateTime?
+  expired_date   DateTime?
+  fulfilled_date DateTime?
+  purchase_id    String?           @unique @db.Uuid // unique: one code per purchase
+  purchase       Purchase?         @relation(fields: [purchase_id], references: [id])
 
+  @@index([sku, status])
+  @@index([variant_id, status])
+  @@map("VoucherCodes")
+}
 
-model TenantsOffers {
-  id              String           @id @default(uuid()) @db.Uuid
-  tenant          Tenant?          @relation(fields: [tenant_id], references: [id])
-  tenant_id       String?          @db.Uuid
-  offer           MerchantsOffers? @relation(fields: [offer_id], references: [id])
-  offer_id        String?          @db.Uuid
+// Tenant adopts specific variants to display on their site.
+// tenant_delta is the price adjustment on top of OfferVariant.price.
+// Final user price = OfferVariant.price + tenant_delta
+model TenantOffer {
+  id           String          @id @default(uuid()) @db.Uuid
+  tenant_id    String          @db.Uuid
+  tenant       Tenant          @relation(fields: [tenant_id], references: [id])
+  offer_id     String          @db.Uuid
+  offer        MerchantsOffers @relation(fields: [offer_id], references: [id])
+  variant_id   String          @db.Uuid
+  variant      OfferVariant    @relation(fields: [variant_id], references: [id])
+  tenant_delta Decimal         @default(0) // positive = markup, negative = subsidy
+  is_active    Boolean         @default(true)
 
-  offerVariant        OfferVariant? @relation(fields: [offer_variant_id], references: [id])
-  offer_variant_id    String?       @db.Uuid
-
-  tenant_price    Decimal?
-
-  @@unique([tenant_id, offer_variant_id])
-
-  @@map("TenantsOffers")
+  @@unique([tenant_id, variant_id])
+  @@index([tenant_id])
+  @@index([offer_id])
+  @@index([variant_id])
+  @@map("TenantOffers")
 }
 
 model OfferExcludedTenants {
-  offer       MerchantsOffers     @relation(fields: [offerId], references: [id])
-  offerId  String @db.Uuid
-  tenant       Tenant     @relation(fields: [tenantId], references: [id])
-  tenantId String @db.Uuid
+  offer_id  String          @db.Uuid
+  offer     MerchantsOffers @relation(fields: [offer_id], references: [id])
+  tenant_id String          @db.Uuid
+  tenant    Tenant          @relation(fields: [tenant_id], references: [id])
 
-  @@id([offerId, tenantId])
+  @@id([offer_id, tenant_id])
+  @@map("OfferExcludedTenants")
 }
 
 model User {
@@ -264,68 +268,46 @@ model User {
   name      String
   email     String  @unique
   phone     String?
-  tenant    Tenant? @relation(fields: [tenant_id], references: [id])
   tenant_id String? @db.Uuid
+  tenant    Tenant? @relation(fields: [tenant_id], references: [id])
 
   purchases Purchase[]
 
   @@map("Users")
 }
 
+// Prices are snapshotted at transaction time — never recalculated from live data.
+// amount = variant_price + tenant_delta
 model Purchase {
-  id                   String          @id @default(uuid()) @db.Uuid
+  id                   String           @id @default(uuid()) @db.Uuid
+  offer_id             String?          @db.Uuid
   offer                MerchantsOffers? @relation(fields: [offer_id], references: [id])
-  offer_id             String?         @db.Uuid
-  user                 User?           @relation(fields: [user_id], references: [id])
-  user_id              String?         @db.Uuid
-
-  offerVariant         OfferVariant?   @relation(fields: [offer_variant_id], references: [id])
-  offer_variant_id     String?         @db.Uuid
-
-  tenant_id            String?
-  amount               Decimal
-  currency             String          @default("ILS")
-  transaction_id       String          @unique
+  user_id              String?          @db.Uuid
+  user                 User?            @relation(fields: [user_id], references: [id])
+  offer_variant_id     String?          @db.Uuid
+  offer_variant        OfferVariant?    @relation(fields: [offer_variant_id], references: [id])
+  tenant_id            String?          @db.Uuid
+  tenant               Tenant?          @relation(fields: [tenant_id], references: [id])
+  variant_price        Decimal // snapshot of OfferVariant.price at purchase time
+  tenant_delta         Decimal // snapshot of TenantOffer.tenant_delta at purchase time
+  amount               Decimal // variant_price + tenant_delta
+  currency             String           @default("ILS")
+  transaction_id       String           @unique
   payme_sale_id        String?
   payme_sale_code      Int?
   payme_transaction_id String?
   sale_url             String?
   expiration_date      DateTime?
-  status               PurchaseStatus  @default(pending)
+  status               PurchaseStatus   @default(pending)
   receipt_details      Json?
-  created_at           DateTime        @default(now())
-  updated_at           DateTime?       @updatedAt
+  created_at           DateTime         @default(now())
+  updated_at           DateTime?        @updatedAt
 
-  coupon Coupon?
+  voucher_code VoucherCode?
 
+  @@index([user_id])
+  @@index([offer_id])
+  @@index([offer_variant_id])
+  @@index([tenant_id])
   @@map("Purchases")
-}
-
-model Coupon {
-  id                 String          @id @default(uuid()) @db.Uuid
-  offer              MerchantsOffers @relation(fields: [offer_id], references: [id])
-  offer_id           String          @db.Uuid
-
-  offerVariant       OfferVariant?   @relation(fields: [offer_variant_id], references: [id])
-  offer_variant_id   String?         @db.Uuid
-
-  tenant             Tenant          @relation(fields: [tenant_id], references: [id])
-  tenant_id          String          @db.Uuid
-  purchase           Purchase?       @relation(fields: [purchase_id], references: [id])
-  purchase_id        String?         @unique @db.Uuid
-
-  barcode            String?
-  sku                String?
-  price              Decimal?
-  cost               Decimal?
-  price_for_consumer Decimal?
-  email_template_id  Int?
-  user_email         String?
-  issued_date        DateTime?
-  expired_date       DateTime?
-  status             CouponStatus    @default(available)
-  created_at         DateTime        @default(now())
-  updated_at         DateTime?       @updatedAt
-
-  @@map("Coupons")
 }
