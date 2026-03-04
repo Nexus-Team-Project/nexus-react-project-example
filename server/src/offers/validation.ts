@@ -1,11 +1,6 @@
 import { Request } from "express";
 import { z } from "zod";
-import {
-  OfferStatus,
-  OfferType,
-  PriceModifiers,
-  VariantsType,
-} from "@prisma/client";
+import { OfferStatus, OfferType } from "@prisma/client";
 import { AppError } from "../errors/AppError";
 
 // Validation schemas
@@ -117,63 +112,59 @@ export function validateOfferRequest(req: Request) {
 
 // ── Create Offer ─────────────────────────────────────────────────────────────
 
-const optionValueSchema = z.object({
-  value: z.string().min(1, "Option value cannot be empty"),
-  priceModifier: z.nativeEnum(PriceModifiers),
-  priceValue: z.number("priceValue is required"),
-});
-
+// One option axis submitted by the merchant, e.g. { option_name: "Color", values: ["Red","Blue"] }
 const optionSchema = z.object({
-  name: z.nativeEnum(VariantsType),
+  option_name: z.string().min(1, "Option name is required"),
+  option_type: z.string().optional().default("text"),
   values: z
-    .array(optionValueSchema)
+    .array(
+      z.union([z.string().min(1, "Option value cannot be empty"), z.number()]),
+    )
     .min(1, "Each option must have at least one value"),
-});
-
-// References an option value by (optionName, value) string — used in variant definitions.
-// The service resolves these to actual DB IDs after options are created.
-const optionValueRefSchema = z.object({
-  optionName: z.nativeEnum(VariantsType),
-  value: z.string().min(1),
-});
-
-const variantSchema = z.object({
-  sku: z.string().min(1, "SKU is required"),
-  barcode: z.string().optional(),
-  // Omit price from the request — the service computes it from base_price + option modifiers.
-  // Kept as optional in the type so the service can attach the computed value before persisting.
-  price: z.number().positive().optional(),
-  stock_quantity: z.number().int().min(0, "Stock quantity cannot be negative"),
-  title: z.string().optional(),
-  summary: z.string().optional(),
-  terms: z.string().optional(),
-  images: z.array(z.string().url("Invalid image URL")).optional().default([]),
-  isActive: z.boolean().optional().default(true),
-  // Which option values this variant represents, e.g. [{optionName:"color", value:"red"}, ...]
-  optionValues: z.array(optionValueRefSchema).optional().default([]),
 });
 
 const createOfferBodySchema = z.object({
   merchantId: z.string().uuid("Invalid merchant ID"),
   title: z.string().min(1, "Title is required"),
-  base_price: z.number().min(0, "Base price cannot be negative"),
   subtitle: z.string().optional(),
   description: z.string().optional(),
   images: z.string().url("Invalid image URL").optional(),
   type: z.nativeEnum(OfferType),
   category: z.string().optional(),
   status: z.nativeEnum(OfferStatus).default("active"),
-  available_quantity: z.number().int().positive().optional(),
   time_limit: z.number().int().positive().optional(),
   expiration_date: z.string().datetime({ offset: true }).optional(),
+  // Variants are auto-generated from the Cartesian product of options.
+  // The merchant fills price and stock in a second UI step.
   options: z.array(optionSchema).optional().default([]),
-  variants: z.array(variantSchema).min(1, "At least one variant is required"),
 });
 
 export type CreateOfferInput = z.infer<typeof createOfferBodySchema>;
 
 export function validateCreateOfferRequest(req: Request): CreateOfferInput {
   const result = createOfferBodySchema.safeParse(req.body);
+  if (!result.success) {
+    throw new AppError(
+      400,
+      "INVALID_PARAMETERS",
+      result.error.issues[0].message,
+    );
+  }
+  return result.data;
+}
+
+// ── Adopt Variant ─────────────────────────────────────────────────────────────
+
+const adoptVariantBodySchema = z.object({
+  tenantId: z.string().min(1, "Tenant ID is required"),
+  variantId: z.string().uuid("Invalid variant ID"),
+  tenantDelta: z.number().default(0),
+});
+
+export type AdoptVariantInput = z.infer<typeof adoptVariantBodySchema>;
+
+export function validateAdoptVariantRequest(req: Request): AdoptVariantInput {
+  const result = adoptVariantBodySchema.safeParse(req.body);
   if (!result.success) {
     throw new AppError(
       400,

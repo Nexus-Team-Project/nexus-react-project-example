@@ -5,6 +5,7 @@ import {
   validateStatsRequest,
   validateUserOffersStatusRequest,
   validateCreateOfferRequest,
+  validateAdoptVariantRequest,
 } from "../offers/validation";
 import {
   getTenantAvailableOffers,
@@ -12,6 +13,7 @@ import {
   getOfferDetails,
   getOffersStats,
   getUserPurchasedOffersStatus,
+  adoptOfferVariant,
 } from "./repository";
 import { createOffer } from "./service";
 import logger from "../logger";
@@ -130,7 +132,7 @@ router.get(
         return {
           offerVariantId: purchase.offer_variant_id,
           offerId: purchase.offer_id,
-          title: purchase.offerVariant?.title ?? purchase.offer?.title ?? "",
+          title: purchase.offer?.title ?? "",
           purchaseDate: purchase.created_at.toISOString(),
           expiryDate: purchase.expiration_date?.toISOString() ?? null,
           status,
@@ -169,12 +171,14 @@ router.get("/:offerId", async (req: Request, res: Response) => {
 
     const result = {
       offerId: offer.id,
-      variants: offer.OfferVariants.map((offerVariant) => ({
+      variants: offer.variants.map((offerVariant) => ({
         variantId: offerVariant.id,
         images: offerVariant.images,
-        title: offerVariant.title,
+        combination: offerVariant.combination,
         summary: offerVariant.summary,
         terms: offerVariant.terms,
+        price: Number(offerVariant.price),
+        stock_quantity: offerVariant.stock_quantity,
       })),
     };
     logger.info("Fetched offer details", {
@@ -190,6 +194,33 @@ router.get("/:offerId", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to fetch offer details" });
   }
 });
+
+router.post(
+  "/adopt-variant",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const data = validateAdoptVariantRequest(req);
+      const tenantOffer = await adoptOfferVariant(data);
+
+      logger.info("POST /adopt-variant succeeded", {
+        tenantOfferID: tenantOffer.id,
+        variantId: tenantOffer.variant_id,
+        tenantId: tenantOffer.tenant_id,
+      });
+
+      res.status(201).json({
+        tenantOfferId: tenantOffer.id,
+        tenantId: tenantOffer.tenant_id,
+        offerId: tenantOffer.offer_id,
+        variantId: tenantOffer.variant_id,
+        tenantDelta: Number(tenantOffer.tenant_delta),
+        isActive: tenantOffer.is_active,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 router.post(
   "/create-offer",
@@ -213,7 +244,7 @@ router.post(
           sku: v.sku,
           price: Number(v.price),
           stock_quantity: v.stock_quantity,
-          title: v.title ?? null,
+          combination: v.combination,
           isActive: v.isActive,
         })),
       });

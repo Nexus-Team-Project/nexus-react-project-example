@@ -1,6 +1,11 @@
 import crypto from "crypto";
 import { AppError } from "../errors/AppError";
-import { findUserByEmail, savePurchase } from "./repository";
+import {
+  findUserByEmail,
+  findTenantByExternalId,
+  getTenantOfferDelta,
+  savePurchase,
+} from "./repository";
 import { PurchaseRequestData } from "./validation";
 import axios from "axios";
 import logger from "../logger";
@@ -39,7 +44,6 @@ function computeExpirationDate(
 }
 
 async function createPaymeSale(
-  offer: OfferData,
   data: PurchaseRequestData,
   productName: string,
 ): Promise<PaymeSaleResponse> {
@@ -124,50 +128,36 @@ async function createPaymeSale(
 export async function createPurchase(
   data: PurchaseRequestData,
 ): Promise<PaymeSaleResponse> {
+  // amount needs to be calculates by the variant_price + tenant_delta.
   logger.info("Creating purchase", {
     offerId: data.offerId,
     offerVariantId: data.offerVariantId,
     tenantId: data.tenantId,
     email: data.buyer_email,
   });
+  // Snapshot of OfferVariant.price — set in the variant branch, falls back to
+  // data.amount for the direct-offer flow (no variant involved).
 
-  let offer: OfferData;
-  let offerId: string;
-  let offerVariantId: string | undefined;
-  let productName: string;
-
-  if (data.offerVariantId) {
-    // OfferVariant flow: resolve the parent offer through the variant relation
-    const offerVariant = await getOfferVariant(data.offerVariantId);
-    if (!offerVariant) {
-      logger.warn("OfferVariant not found", {
-        offerVariantId: data.offerVariantId,
-      });
-      throw new AppError(
-        404,
-        "OFFER_VARIANT_NOT_FOUND",
-        "The requested offer variant does not exist",
-      );
-    }
-    offer = offerVariant.offer;
-    offerId = offerVariant.offerId;
-    offerVariantId = offerVariant.id;
-    productName = offerVariant.title ?? offer.title;
-    validateOffer(offer, offerId);
-    logger.info("OfferVariant resolved to offer", {
-      offerVariantId,
-      offerId,
-      offerType: offer.type,
+  // OfferVariant flow: resolve the parent offer through the variant relation
+  const offerVariant = await getOfferVariant(data.offerVariantId);
+  if (!offerVariant) {
+    logger.warn("OfferVariant not found", {
+      offerVariantId: data.offerVariantId,
     });
-  } else {
-    // Direct offer flow
-    offerId = data.offerId!;
-    offer = await fetchOffer(offerId);
-    productName = offer.title;
+    throw new AppError(
+      404,
+      "OFFER_VARIANT_NOT_FOUND",
+      "The requested offer variant does not exist",
+    );
   }
+  validateOffer(offerVariant.offer);
+  logger.info("OfferVariant resolved to offer", {
+    offerVariantId: offerVariant.id,
+    offerId: offerVariant.offer,
+    offerType: offerVariant.offer.type,
+  });
 
-  const payme = await createPaymeSale(offer, data, productName);
-
+  const payme = await createPaymeSale(data, offerVariant.offer.title);
   //Finds user by email on users table and connect it to purchase on db.
   const user = await findUserByEmail(data.buyer_email);
   if (!user) {
@@ -175,19 +165,40 @@ export async function createPurchase(
     throw new AppError(401, "USER_NOT_FOUND", "User not found");
   }
 
+  // Resolve tenant UUID for the FK and to look up tenant_delta
+  const tenant = await findTenantByExternalId(data.tenantId);
+  if (!tenant) {
+    logger.warn("Tenant not found during purchase", {
+      tenantId: data.tenantId,
+    });
+    throw new AppError(401, "TENANT_NOT_FOUND", "Tenant not found");
+  }
+
+  // Snapshot tenant_delta at transaction time
+  const tenant_delta =
+    tenant.id && offerVariant.id
+      ? await getTenantOfferDelta(tenant.id, offerVariant.id)
+      : 0;
+
   const purchaseCreatedAt = new Date();
-  const expiration_date = computeExpirationDate(offer, purchaseCreatedAt);
+  const expiration_date = computeExpirationDate(
+    offerVariant.offer,
+    purchaseCreatedAt,
+  );
 
   await savePurchase(data, payme, user.id, {
-    offerId,
-    offerVariantId,
+    offerId: offerVariant.offer.id,
+    offerVariantId: offerVariant.id,
+    tenantUUID: tenant.id,
     expiration_date,
+    variant_price: Number(offerVariant.price),
+    tenant_delta,
   });
 
   logger.info("Purchase created successfully", {
-    offerId,
-    offerVariantId,
-    offerType: offer.type,
+    offerId: offerVariant.offer.id,
+    offerVariantId: offerVariant.id,
+    offerType: offerVariant.offer.type,
     expiration_date,
     transactionId: payme.transaction_id,
   });

@@ -1,6 +1,6 @@
 import prisma from "../prisma";
 
-// Fetch a purchase with all fields needed for coupon claiming.
+// Fetch a purchase with all fields needed for voucher code claiming.
 export const getPurchaseForCouponClaim = async (transactionId: string) => {
   return await prisma.purchase.findUnique({
     where: { transaction_id: transactionId },
@@ -17,40 +17,34 @@ export const getPurchaseForCouponClaim = async (transactionId: string) => {
 
 export type ClaimCouponData = {
   purchaseId: string;
-  userEmail: string;
   issuedDate: Date;
   expiredDate: Date | null;
 };
 
-// Atomically find the first available coupon matching the purchase context
-// and mark it as used. Returns the claimed coupon, or null if none available.
+// Atomically find the first available VoucherCode for the given variant,
+// claim it, and link it to the purchase. Returns the claimed code or null.
 export const claimAvailableCoupon = async (
-  offerId: string,
-  offerVariantId: string | null | undefined,
-  tenantId: string,
+  variantId: string,
   data: ClaimCouponData,
 ) => {
   return await prisma.$transaction(async (tx) => {
-    const coupon = await tx.coupon.findFirst({
+    const voucherCode = await tx.voucherCode.findFirst({
       where: {
-        offer_id: offerId,
-        offer_variant_id: offerVariantId ?? null,
-        tenant_id: tenantId,
+        variant_id: variantId,
         status: "available",
         purchase_id: null,
       },
     });
 
-    if (!coupon) return null;
+    if (!voucherCode) return null;
 
-    return await tx.coupon.update({
-      where: { id: coupon.id },
+    return await tx.voucherCode.update({
+      where: { id: voucherCode.id },
       data: {
         purchase_id: data.purchaseId,
-        user_email: data.userEmail,
         issued_date: data.issuedDate,
         expired_date: data.expiredDate,
-        status: "used",
+        status: "issued",
       },
     });
   });

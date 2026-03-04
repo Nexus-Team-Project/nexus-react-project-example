@@ -1,18 +1,22 @@
 import prisma from "../prisma";
-import { CreateOfferInput } from "./validation";
+import { AppError } from "../errors/AppError";
+import { AdoptVariantInput, CreateOfferInput } from "./validation";
+import logger from "../logger";
 
 export function getOfferDetails(offerId: string) {
   return prisma.merchantsOffers.findUnique({
     where: { id: offerId },
     select: {
       id: true,
-      OfferVariants: {
+      variants: {
         select: {
           id: true,
           images: true,
-          title: true,
+          combination: true,
           summary: true,
           terms: true,
+          price: true,
+          stock_quantity: true,
         },
       },
     },
@@ -27,10 +31,20 @@ export async function getOffersStats(params: {
 }) {
   const { tenantId, startDate, endDate, offerId } = params;
 
+  const tenant = await prisma.tenant.findFirst({
+    where: { tenant_id: tenantId },
+    select: { id: true },
+  });
+  if (!tenant) {
+    throw new AppError(404, "TENANT_NOT_FOUND", "Tenant not found");
+  }
+
+  // Each row = one unique (offer, user) pair.
+  // Counting rows per offer = distinct users; summing amounts = total spent.
   const groups = await prisma.purchase.groupBy({
-    by: ["offer_id"],
+    by: ["offer_id", "user_id"],
     where: {
-      tenant_id: tenantId,
+      tenant_id: tenant.id,
       ...(offerId && { offer_id: offerId }),
       ...((startDate || endDate) && {
         created_at: {
@@ -43,20 +57,37 @@ export async function getOffersStats(params: {
     _sum: { amount: true },
   });
 
-  const offerIds = groups.map((g) => g.offer_id).filter(Boolean) as string[];
+  const statsMap = new Map<
+    string,
+    {
+      numberOfUsers: number;
+      numberOfPurchases: number;
+      totalPurchaseAmount: number;
+    }
+  >();
+  for (const { offer_id, _count, _sum } of groups) {
+    if (!offer_id) continue;
+    const entry = statsMap.get(offer_id) ?? {
+      numberOfUsers: 0,
+      numberOfPurchases: 0,
+      totalPurchaseAmount: 0,
+    };
+    entry.numberOfUsers += 1;
+    entry.numberOfPurchases += _count.id;
+    entry.totalPurchaseAmount += Number(_sum.amount ?? 0);
+    statsMap.set(offer_id, entry);
+  }
 
   const offers = await prisma.merchantsOffers.findMany({
-    where: { id: { in: offerIds } },
+    where: { id: { in: [...statsMap.keys()] } },
     select: { id: true, title: true },
   });
+  const titleMap = new Map(offers.map((o) => [o.id, o.title]));
 
-  const offerMap = new Map(offers.map((o) => [o.id, o.title]));
-
-  return groups.map((g) => ({
-    offerId: g.offer_id,
-    title: offerMap.get(g.offer_id!) ?? "",
-    numberOfUsers: g._count.id,
-    totalPurchaseAmount: Number(g._sum.amount ?? 0),
+  return [...statsMap.entries()].map(([id, stats]) => ({
+    offerId: id,
+    title: titleMap.get(id) ?? "",
+    ...stats,
   }));
 }
 
@@ -66,8 +97,7 @@ export function getTenantUsedOffers(
   page?: number,
   pageSize?: number,
 ) {
-  // What about trycatch here.
-  return prisma.tenantsOffers.findMany({
+  return prisma.tenantOffer.findMany({
     skip: page && pageSize ? (page - 1) * pageSize : undefined,
     take: pageSize,
     where: {
@@ -84,6 +114,14 @@ export function getTenantUsedOffers(
               business_category: true,
             },
           },
+          variants: {
+            select: {
+              id: true,
+              combination: true,
+              price: true,
+              stock_quantity: true,
+            },
+          },
         },
       },
     },
@@ -96,7 +134,7 @@ export async function getUserPurchasedOffersStatus(
 ) {
   return prisma.purchase.findMany({
     where: {
-      tenant_id: tenant,
+      tenant: { tenant_id: tenant },
       user: { email: userEmail },
     },
     select: {
@@ -113,14 +151,27 @@ export async function getUserPurchasedOffersStatus(
           expiration_date: true,
         },
       },
-      offerVariant: {
+      offer_variant: {
         select: {
           id: true,
-          title: true,
+          combination: true,
         },
       },
     },
   });
+}
+
+// Builds the Cartesian product of option value arrays.
+// Returns [{}] for an empty options list (one no-option variant).
+function buildCombinations(
+  options: Array<{ option_name: string; values: (string | number)[] }>,
+): Record<string, string | number>[] {
+  if (options.length === 0) return [{}];
+  const [first, ...rest] = options;
+  const restCombinations = buildCombinations(rest);
+  return first.values.flatMap((value) =>
+    restCombinations.map((combo) => ({ [first.option_name]: value, ...combo })),
+  );
 }
 
 export async function createOfferWithVariants(data: CreateOfferInput) {
@@ -136,8 +187,6 @@ export async function createOfferWithVariants(data: CreateOfferInput) {
         type: data.type,
         category: data.category,
         status: data.status,
-        base_price: data.base_price,
-        available_quantity: data.available_quantity,
         time_limit: data.time_limit,
         expiration_date: data.expiration_date
           ? new Date(data.expiration_date)
@@ -145,92 +194,39 @@ export async function createOfferWithVariants(data: CreateOfferInput) {
       },
     });
 
-    // 2. Create options + their values; build a lookup "optionName:value" -> valueId
-    //    so we can wire up OfferVariantValue records without extra queries.
-    const valueIdMap = new Map<string, string>();
-
-    for (const option of data.options) {
-      const createdOption = await tx.variantOption.create({
-        data: {
-          offerId: offer.id,
-          name: option.name,
-          values: {
-            create: option.values.map((v) => ({
-              value: v.value,
-              priceModifier: v.priceModifier,
-              priceValue: v.priceValue,
-            })),
-          },
-        },
-        include: { values: true },
+    // 2. Create OfferOption rows
+    if (data.options.length > 0) {
+      await tx.offerOption.createMany({
+        data: data.options.map((o) => ({
+          offer_id: offer.id,
+          option_name: o.option_name,
+          option_type: o.option_type ?? "text",
+          values: o.values,
+        })),
       });
-
-      for (const createdValue of createdOption.values) {
-        valueIdMap.set(`${option.name}:${createdValue.value}`, createdValue.id);
-      }
     }
 
-    // 3. Create each variant and link it to its option values
-    const createdVariants = await Promise.all(
-      data.variants.map((variant) => {
-        const optionValueIds = variant.optionValues.map((ref) => {
-          const id = valueIdMap.get(`${ref.optionName}:${ref.value}`);
-          // Guard — should never happen if service pre-validation passed
-          if (!id) {
-            throw new Error(
-              `Value ID not found for ${ref.optionName}:${ref.value}`,
-            );
-          }
-          return id;
-        });
+    // 3. Compute Cartesian product → one variant per combination
+    const combinations = buildCombinations(data.options);
 
-        return tx.offerVariant.create({
+    // 4. Create OfferVariant rows — price: 0 and isActive: false until the
+    //    merchant fills them in the second UI step.
+    const variants = await Promise.all(
+      combinations.map((combination, i) =>
+        tx.offerVariant.create({
           data: {
-            offerId: offer.id,
-            sku: variant.sku,
-            barcode: variant.barcode,
-            // price is guaranteed by the service's computeVariantPrice step
-            price: variant.price!,
-            stock_quantity: variant.stock_quantity,
-            title: variant.title,
-            summary: variant.summary,
-            terms: variant.terms,
-            images: variant.images,
-            isActive: variant.isActive,
-            values: {
-              create: optionValueIds.map((valueId) => ({ valueId })),
-            },
+            offer_id: offer.id,
+            sku: `${offer.id}-${i + 1}`,
+            stock_quantity: 0,
+            price: 0,
+            combination,
+            isActive: false,
           },
-        });
-      }),
+        }),
+      ),
     );
 
-    return { offer, variants: createdVariants };
-  });
-}
-
-export function getTenantAvailableOffers(
-  tenantId: string,
-  category?: string,
-  page?: number,
-  pageSize?: number,
-) {
-  return prisma.merchantsOffers.findMany({
-    skip: page && pageSize ? (page - 1) * pageSize : undefined,
-    take: pageSize,
-    where: {
-      category,
-      OR: [{ expiration_date: null }, { expiration_date: { gt: new Date() } }],
-      excludedTenants: { none: { tenant: { tenant_id: tenantId } } },
-    },
-    select: {
-      id: true,
-      images: true,
-      title: true,
-      subtitle: true,
-      description: true,
-      category: true,
-    },
+    return { offer, variants };
   });
 }
 
@@ -238,8 +234,8 @@ export const getOffer = async (offerId: string) => {
   return await prisma.merchantsOffers.findUnique({
     where: { id: offerId },
     select: {
+      id: true,
       status: true,
-      available_quantity: true,
       title: true,
       type: true,
       time_limit: true,
@@ -255,17 +251,88 @@ export const getOffer = async (offerId: string) => {
   });
 };
 
+export function getTenantAvailableOffers(
+  tenantId: string,
+  category?: string,
+  page?: number,
+  pageSize?: number,
+) {
+  return prisma.merchantsOffers.findMany({
+    skip: page && pageSize ? (page - 1) * pageSize : undefined,
+    take: pageSize,
+    where: {
+      category,
+      OR: [{ expiration_date: null }, { expiration_date: { gt: new Date() } }],
+      excludedTenants: { none: { tenant: { tenant_id: tenantId } } },
+    },
+
+    select: {
+      id: true,
+      images: true,
+      title: true,
+      subtitle: true,
+      description: true,
+      category: true,
+      variants: {
+        select: {
+          id: true,
+          price: true,
+          combination: true,
+        },
+      },
+    },
+  });
+}
+
+export async function adoptOfferVariant(data: AdoptVariantInput) {
+  const tenant = await prisma.tenant.findFirst({
+    where: { tenant_id: data.tenantId },
+    select: { id: true },
+  });
+  if (!tenant) {
+    throw new AppError(404, "TENANT_NOT_FOUND", "Tenant not found");
+  }
+
+  const variant = await prisma.offerVariant.findUnique({
+    where: { id: data.variantId },
+    select: { id: true, offer_id: true },
+  });
+
+  if (!variant) {
+    throw new AppError(404, "VARIANT_NOT_FOUND", "Offer variant not found");
+  }
+
+  return prisma.tenantOffer.upsert({
+    where: {
+      tenant_id_variant_id: {
+        tenant_id: tenant.id,
+        variant_id: variant.id,
+      },
+    },
+    update: { tenant_delta: data.tenantDelta, is_active: true },
+    create: {
+      tenant_id: tenant.id,
+      offer_id: variant.offer_id,
+      variant_id: variant.id,
+      tenant_delta: data.tenantDelta,
+    },
+  });
+}
+
 export const getOfferVariant = async (offerVariantId: string) => {
   return await prisma.offerVariant.findUnique({
     where: { id: offerVariantId },
     select: {
       id: true,
-      title: true,
-      offerId: true,
+      combination: true,
+      price: true,
+      offer_id: true,
+      sku: true,
+      stock_quantity: true,
       offer: {
         select: {
+          id: true,
           status: true,
-          available_quantity: true,
           title: true,
           type: true,
           time_limit: true,

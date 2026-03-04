@@ -7,6 +7,24 @@ export const findUserByEmail = async (email: string) => {
   return await prisma.user.findUnique({ where: { email } });
 };
 
+export const findTenantByExternalId = async (externalTenantId: string) => {
+  return await prisma.tenant.findFirst({
+    where: { tenant_id: externalTenantId },
+    select: { id: true },
+  });
+};
+
+export const getTenantOfferDelta = async (
+  tenantUUID: string,
+  variantId: string,
+): Promise<number> => {
+  const tenantOffer = await prisma.tenantOffer.findFirst({
+    where: { tenant_id: tenantUUID, variant_id: variantId },
+    select: { tenant_delta: true },
+  });
+  return Number(tenantOffer?.tenant_delta ?? 0);
+};
+
 export const savePurchase = async (
   data: PurchaseRequestData,
   payme: PaymeSaleResponse,
@@ -14,7 +32,10 @@ export const savePurchase = async (
   context: {
     offerId: string;
     offerVariantId?: string;
+    tenantUUID?: string;
     expiration_date: Date | null;
+    variant_price: number;
+    tenant_delta: number;
   },
 ) => {
   return await prisma.purchase.create({
@@ -22,7 +43,9 @@ export const savePurchase = async (
       offer_id: context.offerId,
       offer_variant_id: context.offerVariantId,
       user_id: userId,
-      tenant_id: data.tenantId,
+      tenant_id: context.tenantUUID,
+      variant_price: context.variant_price,
+      tenant_delta: context.tenant_delta,
       amount: data.amount,
       transaction_id: payme.transaction_id,
       payme_sale_id: payme.payme_sale_id,

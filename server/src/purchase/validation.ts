@@ -4,9 +4,9 @@ import { AppError } from "../errors/AppError";
 
 const bodyParamsSchema = z
   .object({
-    tenantId: z.string().optional(),
+    tenantId: z.string(),
     offerId: z.uuid("Invalid offer ID format").optional(),
-    offerVariantId: z.uuid("Invalid offer variant ID format").optional(),
+    offerVariantId: z.uuid("Invalid offer variant ID format"),
     email: z.email("Invalid email format"),
     amount: z.coerce.number().positive("The provided amount is invalid"),
     buyer_name: z.string().min(1, "Buyer name is required"),
