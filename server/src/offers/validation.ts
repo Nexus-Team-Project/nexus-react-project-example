@@ -123,26 +123,87 @@ const optionSchema = z.object({
     .min(1, "Each option must have at least one value"),
 });
 
-const createOfferBodySchema = z.object({
-  merchantId: z.string().uuid("Invalid merchant ID"),
-  title: z.string().min(1, "Title is required"),
-  subtitle: z.string().optional(),
-  description: z.string().optional(),
-  images: z.string().url("Invalid image URL").optional(),
-  type: z.nativeEnum(OfferType),
-  category: z.string().optional(),
-  status: z.nativeEnum(OfferStatus).default("active"),
-  time_limit: z.number().int().positive().optional(),
-  expiration_date: z.string().datetime({ offset: true }).optional(),
-  // Variants are auto-generated from the Cartesian product of options.
-  // The merchant fills price and stock in a second UI step.
-  options: z.array(optionSchema).optional().default([]),
+// Voucher-specific financial data attached to a single variant.
+const variantVoucherDataSchema = z.object({
+  purchase_value: z.number().positive("purchase_value must be positive"),
+  cost_price: z.number().nonnegative("cost_price must be non-negative"),
+  // Redeemable code strings — each becomes one VoucherCode row for this variant.
+  codes: z.array(z.string().min(1, "Voucher code cannot be empty")).optional(),
 });
+
+// Pricing/stock override for one specific variant combination.
+// combination must exactly match what the Cartesian product of options produces,
+// e.g. {} for no-option offers or { "Size": "M", "Color": "Red" } for multi-axis offers.
+const variantDataSchema = z.object({
+  // z.record(keySchema, valueSchema) — keys are always strings, values string | number.
+  combination: z.record(z.string(), z.union([z.string(), z.number()])),
+  price: z.number().nonnegative().default(0),
+  value: z.number().nonnegative().default(0),
+  cost: z.number().nonnegative().default(0),
+  stock_quantity: z.number().int().nonnegative().default(0),
+  // Required per-entry when the parent offer type is Voucher.
+  voucherData: variantVoucherDataSchema.optional(),
+});
+
+const createOfferBodySchema = z
+  .object({
+    merchantId: z.string().uuid("Invalid merchant ID"),
+    title: z.string().min(1, "Title is required"),
+    subtitle: z.string().optional(),
+    description: z.string().optional(),
+    images: z.string().url("Invalid image URL").optional(),
+    type: z.nativeEnum(OfferType),
+    category: z.string().optional(),
+    status: z.nativeEnum(OfferStatus).default("active"),
+    time_limit: z.number().int().positive().optional(),
+    expiration_date: z.string().datetime({ offset: true }).optional(),
+    // Option axes — variants are auto-generated from the Cartesian product.
+    options: z.array(optionSchema).optional().default([]),
+    // Per-variant pricing and (for Voucher) financial data.
+    // Each entry is matched to a generated variant by its combination object.
+    // Omitted variants default to price/value/cost = 0.
+    variantData: z.array(variantDataSchema).optional().default([]),
+  })
+  .refine(
+    (data) => {
+      if (data.type !== "Voucher") return true;
+      // For Voucher offers every supplied variantData entry must carry voucherData.
+      return data.variantData.every((vd) => vd.voucherData !== undefined);
+    },
+    {
+      message:
+        "Each variantData entry must include voucherData for Voucher offers",
+      path: ["variantData"],
+    },
+  );
 
 export type CreateOfferInput = z.infer<typeof createOfferBodySchema>;
 
 export function validateCreateOfferRequest(req: Request): CreateOfferInput {
   const result = createOfferBodySchema.safeParse(req.body);
+  if (!result.success) {
+    throw new AppError(
+      400,
+      "INVALID_PARAMETERS",
+      result.error.issues[0].message,
+    );
+  }
+  return result.data;
+}
+
+// ── Bulk Create Offers ────────────────────────────────────────────────────────
+
+const bulkCreateOffersBodySchema = z.object({
+  offers: z
+    .array(createOfferBodySchema)
+    .min(1, "At least one offer is required")
+    .max(50, "Bulk creation supports at most 50 offers at a time"),
+});
+
+export type BulkCreateOffersInput = z.infer<typeof bulkCreateOffersBodySchema>;
+
+export function validateBulkCreateOffersRequest(req: Request): BulkCreateOffersInput {
+  const result = bulkCreateOffersBodySchema.safeParse(req.body);
   if (!result.success) {
     throw new AppError(
       400,

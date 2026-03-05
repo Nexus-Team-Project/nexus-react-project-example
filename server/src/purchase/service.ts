@@ -10,7 +10,7 @@ import { PurchaseRequestData } from "./validation";
 import axios from "axios";
 import logger from "../logger";
 import { getOffer, getOfferVariant } from "../offers/repository";
-import { fetchOffer, validateOffer } from "../offers/service";
+import { validateOffer } from "../offers/service";
 
 type OfferData = NonNullable<Awaited<ReturnType<typeof getOffer>>>;
 
@@ -43,9 +43,22 @@ function computeExpirationDate(
   return null;
 }
 
+// Computes the price the user pays.
+// Same formula used when the tenant adopts a variant (adoptOfferVariant):
+//   price = variant.price + (variant.value - variant.price) * (tenant_delta / 100)
+// tenant_delta is stored as a plain percentage value (e.g. 10 = 10%).
+function computePrice(
+  variantPrice: number,
+  variantValue: number,
+  tenantDelta: number,
+): number {
+  return variantPrice + (variantValue - variantPrice) * (tenantDelta / 100);
+}
+
 async function createPaymeSale(
   data: PurchaseRequestData,
   productName: string,
+  price: number,
 ): Promise<PaymeSaleResponse> {
   if (!process.env.PAYME_ID) {
     logger.error("PayMe not configured — PAYME_ID env var missing");
@@ -60,7 +73,7 @@ async function createPaymeSale(
 
   const body: Record<string, unknown> = {
     seller_payme_id: "MPL17706-31740YWY-3LV0PBFM-KB8UOOGY",
-    sale_price: data.amount,
+    sale_price: Math.round(price * 100), // PayMe expects agorot (1 ILS = 100 agorot)
     currency: "ILS",
     product_name: productName,
     transaction_id: transactionId,
@@ -157,7 +170,6 @@ export async function createPurchase(
     offerType: offerVariant.offer.type,
   });
 
-  const payme = await createPaymeSale(data, offerVariant.offer.title);
   //Finds user by email on users table and connect it to purchase on db.
   const user = await findUserByEmail(data.buyer_email);
   if (!user) {
@@ -175,10 +187,26 @@ export async function createPurchase(
   }
 
   // Snapshot tenant_delta at transaction time
-  const tenant_delta =
-    tenant.id && offerVariant.id
-      ? await getTenantOfferDelta(tenant.id, offerVariant.id)
-      : 0;
+  const tenant_delta = await getTenantOfferDelta(tenant.id, offerVariant.id);
+
+  // Compute the price the user pays — server-owned, never trusted from the client.
+  // Uses the same formula as tenant adoption:
+  //   price = variant.price + (variant.value - variant.price) * (tenant_delta / 100)
+  const price = computePrice(
+    Number(offerVariant.price),
+    Number(offerVariant.value),
+    tenant_delta,
+  );
+
+  logger.info("Computed purchase price", {
+    offerType: offerVariant.offer.type,
+    variantPrice: Number(offerVariant.price),
+    variantValue: Number(offerVariant.value),
+    tenantDelta: tenant_delta,
+    price,
+  });
+
+  const payme = await createPaymeSale(data, offerVariant.offer.title, price);
 
   const purchaseCreatedAt = new Date();
   const expiration_date = computeExpirationDate(
@@ -193,6 +221,7 @@ export async function createPurchase(
     expiration_date,
     variant_price: Number(offerVariant.price),
     tenant_delta,
+    price,
   });
 
   logger.info("Purchase created successfully", {

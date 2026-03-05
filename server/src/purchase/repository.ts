@@ -36,6 +36,7 @@ export const savePurchase = async (
     expiration_date: Date | null;
     variant_price: number;
     tenant_delta: number;
+    price: number; // server-computed tenant price; never sourced from the client
   },
 ) => {
   return await prisma.purchase.create({
@@ -46,7 +47,7 @@ export const savePurchase = async (
       tenant_id: context.tenantUUID,
       variant_price: context.variant_price,
       tenant_delta: context.tenant_delta,
-      amount: data.amount,
+      amount: context.price,
       transaction_id: payme.transaction_id,
       payme_sale_id: payme.payme_sale_id,
       payme_sale_code: payme.payme_sale_code,

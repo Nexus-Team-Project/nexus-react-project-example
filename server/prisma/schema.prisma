@@ -179,7 +179,11 @@ model OfferVariant {
   offer          MerchantsOffers @relation(fields: [offer_id], references: [id], onDelete: Cascade)
   sku            String          @unique
   stock_quantity Int
+
   price          Decimal
+  value         Decimal        // e.g Coupons/Vouchers might have a "value" that is different from the price the merchant charges (e.g. price=80, value=100)
+  cost          Decimal        // optional, used for financial reporting and settlement but not required for all offer types
+
   combination    Json // e.g. {"Color":"Red","CouponValue":100} or {}
   summary        String?
   terms          String?
@@ -202,9 +206,9 @@ model VoucherAdmin {
   id               String       @id @default(uuid()) @db.Uuid
   variant_id       String       @unique @db.Uuid
   variant          OfferVariant @relation(fields: [variant_id], references: [id], onDelete: Cascade)
-  sku              String // denormalized for fast lookup
-  cost             Decimal
-  price            Decimal
+  batch_id         String       @db.Uuid // groups all variants from the same creation request (or bulk batch)
+  purchase_value   Decimal // face value of the voucher (provided by merchant)
+  cost_price       Decimal // cost to the merchant (provided by merchant)
   settlement_terms String?
 
   @@map("VoucherAdmins")
@@ -233,8 +237,8 @@ model VoucherCode {
 }
 
 // Tenant adopts specific variants to display on their site.
-// tenant_delta is the price adjustment on top of OfferVariant.price.
-// Final user price = OfferVariant.price + tenant_delta
+// tenant_delta is the price adjustment factor applied to the merchant margin.
+// tenant_price = (variant_value - variant_price) * (1 + tenant_delta)
 model TenantOffer {
   id           String          @id @default(uuid()) @db.Uuid
   tenant_id    String          @db.Uuid
@@ -244,6 +248,7 @@ model TenantOffer {
   variant_id   String          @db.Uuid
   variant      OfferVariant    @relation(fields: [variant_id], references: [id])
   tenant_delta Decimal         @default(0) // positive = markup, negative = subsidy
+  tenant_price Decimal? // (variant_value - variant_price) * (1 + tenant_delta); computed at adoption time
   is_active    Boolean         @default(true)
 
   @@unique([tenant_id, variant_id])
@@ -290,7 +295,7 @@ model Purchase {
   tenant               Tenant?          @relation(fields: [tenant_id], references: [id])
   variant_price        Decimal // snapshot of OfferVariant.price at purchase time
   tenant_delta         Decimal // snapshot of TenantOffer.tenant_delta at purchase time
-  amount               Decimal // variant_price + tenant_delta
+  amount               Decimal // (variant_price / variant_value - variant_price) * tenant_delta%
   currency             String           @default("ILS")
   transaction_id       String           @unique
   payme_sale_id        String?

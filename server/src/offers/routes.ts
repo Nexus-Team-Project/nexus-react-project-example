@@ -6,6 +6,7 @@ import {
   validateUserOffersStatusRequest,
   validateCreateOfferRequest,
   validateAdoptVariantRequest,
+  validateBulkCreateOffersRequest,
 } from "../offers/validation";
 import {
   getTenantAvailableOffers,
@@ -15,7 +16,7 @@ import {
   getUserPurchasedOffersStatus,
   adoptOfferVariant,
 } from "./repository";
-import { createOffer } from "./service";
+import { createBulkOffers, createOffer } from "./service";
 import logger from "../logger";
 
 const router = Router();
@@ -227,7 +228,7 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const data = validateCreateOfferRequest(req);
-      const { offer, variants } = await createOffer(data);
+      const { offer, variants, voucherAdmins, voucherCodes } = await createOffer(data);
 
       logger.info("POST /create-offer succeeded", {
         offerId: offer.id,
@@ -246,6 +247,75 @@ router.post(
           stock_quantity: v.stock_quantity,
           combination: v.combination,
           isActive: v.isActive,
+        })),
+        ...(voucherAdmins && {
+          voucherAdmins: voucherAdmins.map((va) => ({
+            id: va.id,
+            variantId: va.variant_id,
+            batchId: va.batch_id,
+            purchaseValue: Number(va.purchase_value),
+            costPrice: Number(va.cost_price),
+          })),
+        }),
+        ...(voucherCodes && {
+          voucherCodes: voucherCodes.map((vc) => ({
+            id: vc.id,
+            variantId: vc.variant_id,
+            batchId: vc.batch_id,
+            barcode: vc.barcode,
+            status: vc.status,
+          })),
+        }),
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.post(
+  "/create-offer/bulk",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const data = validateBulkCreateOffersRequest(req);
+      const { batchId, results } = await createBulkOffers(data);
+
+      logger.info("POST /create-offer/bulk succeeded", {
+        batchId,
+        offerCount: results.length,
+      });
+
+      res.status(201).json({
+        batchId,
+        offers: results.map(({ offer, variants, voucherAdmins, voucherCodes }) => ({
+          offerId: offer.id,
+          title: offer.title,
+          type: offer.type,
+          status: offer.status,
+          variants: variants.map((v) => ({
+            variantId: v.id,
+            sku: v.sku,
+            combination: v.combination,
+            isActive: v.isActive,
+          })),
+          ...(voucherAdmins && {
+            voucherAdmins: voucherAdmins.map((va) => ({
+              id: va.id,
+              variantId: va.variant_id,
+              batchId: va.batch_id,
+              purchaseValue: Number(va.purchase_value),
+              costPrice: Number(va.cost_price),
+            })),
+          }),
+          ...(voucherCodes && {
+            voucherCodes: voucherCodes.map((vc) => ({
+              id: vc.id,
+              variantId: vc.variant_id,
+              batchId: vc.batch_id,
+              barcode: vc.barcode,
+              status: vc.status,
+            })),
+          }),
         })),
       });
     } catch (error) {

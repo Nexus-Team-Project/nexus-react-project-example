@@ -1,8 +1,8 @@
 import prisma from "../prisma";
 import { AppError } from "../errors/AppError";
 import logger from "../logger";
-import { CreateOfferInput } from "./validation";
-import { createOfferWithVariants, getOffer } from "./repository";
+import { BulkCreateOffersInput, CreateOfferInput } from "./validation";
+import { createBulkVoucherOffers, createOfferWithVariants, getOffer } from "./repository";
 
 export async function createOffer(data: CreateOfferInput) {
   logger.info("Creating offer", {
@@ -20,14 +20,47 @@ export async function createOffer(data: CreateOfferInput) {
     throw new AppError(404, "MERCHANT_NOT_FOUND", "Merchant not found");
   }
 
-  const { offer, variants } = await createOfferWithVariants(data);
+  const { offer, variants, voucherAdmins, voucherCodes } = await createOfferWithVariants(data);
 
   logger.info("Offer created successfully", {
     offerId: offer.id,
     variantCount: variants.length,
+    ...(voucherAdmins && { voucherAdminCount: voucherAdmins.length }),
+    ...(voucherCodes && { voucherCodeCount: voucherCodes.length }),
   });
 
-  return { offer, variants };
+  return { offer, variants, voucherAdmins, voucherCodes };
+}
+
+export async function createBulkOffers(input: BulkCreateOffersInput) {
+  const { offers } = input;
+
+  logger.info("Bulk creating voucher offers", { count: offers.length });
+
+  // Verify all referenced merchants exist
+  const merchantIds = [...new Set(offers.map((o) => o.merchantId))];
+  const merchants = await prisma.merchant.findMany({
+    where: { id: { in: merchantIds } },
+    select: { id: true },
+  });
+  const foundIds = new Set(merchants.map((m) => m.id));
+  const missingId = merchantIds.find((id) => !foundIds.has(id));
+  if (missingId) {
+    throw new AppError(
+      404,
+      "MERCHANT_NOT_FOUND",
+      `Merchant not found: ${missingId}`,
+    );
+  }
+
+  const { batchId, results } = await createBulkVoucherOffers(offers);
+
+  logger.info("Bulk offer creation succeeded", {
+    batchId,
+    offerCount: results.length,
+  });
+
+  return { batchId, results };
 }
 
 type OfferData = NonNullable<Awaited<ReturnType<typeof getOffer>>>;

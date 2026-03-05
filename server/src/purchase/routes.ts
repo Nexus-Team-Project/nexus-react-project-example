@@ -8,6 +8,7 @@ router.post("/", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = validatePurchaseRequest(req);
     const paymeResponse = await createPurchase(data);
+
     res.json(paymeResponse);
   } catch (error) {
     next(error);

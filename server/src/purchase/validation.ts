@@ -8,7 +8,8 @@ const bodyParamsSchema = z
     offerId: z.uuid("Invalid offer ID format").optional(),
     offerVariantId: z.uuid("Invalid offer variant ID format"),
     email: z.email("Invalid email format"),
-    amount: z.coerce.number().positive("The provided amount is invalid"),
+    // amount is intentionally NOT accepted from the client.
+    // The server computes it from the variant and tenant delta.
     buyer_name: z.string().min(1, "Buyer name is required"),
     buyer_email: z.email("Invalid buyer email format"),
     buyer_phone: z.string().optional(),
@@ -31,11 +32,6 @@ export function validatePurchaseRequest(req: Request): PurchaseRequestData {
 
   if (!result.success) {
     const firstIssue = result.error.issues[0];
-    const isAmountError = firstIssue.path.includes("amount");
-
-    if (isAmountError)
-      throw new AppError(400, "AMOUNT_INVALID", firstIssue.message);
-
     throw new AppError(400, "INVALID_PARAMETERS", firstIssue.message);
   }
 
