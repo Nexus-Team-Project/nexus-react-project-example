@@ -1,0 +1,303 @@
+/// This Prisma schema stores tenants, offers, purchases, payments, benefits, and API tokens.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ApiTokenType {
+  PARTNER
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum OfferType {
+  VOUCHER
+  COUPON
+  GIFT_CARD
+  BENEFIT
+}
+
+enum OfferStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum SubOfferStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum CostOptionType {
+  FIXED
+  CUSTOM
+}
+
+enum CostOptionStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum PurchaseStatus {
+  PENDING_PAYMENT
+  PAID
+  FAILED
+  CANCELLED
+  EXPIRED
+  REFUNDED
+}
+
+enum PaymentProviderName {
+  PAYME
+}
+
+enum ProviderEnvironment {
+  SANDBOX
+  PRODUCTION
+}
+
+enum PaymentSessionStatus {
+  CREATED
+  REDIRECTED
+  PAID
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum BenefitStatus {
+  ACTIVE
+  USED
+  EXPIRED
+  REVOKED
+}
+
+model Tenant {
+  id        String       @id @default(uuid())
+  tenantId  String       @unique
+  name      String
+  status    TenantStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  apiTokens ApiToken[]
+  users     User[]
+  offers    Offer[]
+  purchases Purchase[]
+  benefits  IssuedBenefit[]
+}
+
+model ApiToken {
+  id                  String       @id @default(uuid())
+  tokenHash           String       @unique
+  type                ApiTokenType
+  tenantId            String?
+  userEmail           String?
+  userEmailNormalized String?
+  scopes              Json
+  expiresAt           DateTime?
+  revokedAt           DateTime?
+  createdAt           DateTime     @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, type, revokedAt])
+  @@index([tenantId, userEmailNormalized, type])
+}
+
+model User {
+  id                  String     @id @default(uuid())
+  tenantId            String
+  email               String
+  emailNormalized     String
+  fullName            String?
+  phone               String?
+  status              UserStatus @default(ACTIVE)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  purchases Purchase[]
+
+  @@unique([tenantId, emailNormalized])
+  @@index([tenantId, status])
+}
+
+model Offer {
+  id        String      @id @default(uuid())
+  publicId  String      @unique
+  tenantId  String
+  category  String?
+  title     String
+  summary   String
+  imageUrl  String
+  offerType OfferType
+  status    OfferStatus @default(ACTIVE)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  tenant     Tenant          @relation(fields: [tenantId], references: [id])
+  subOffers  SubOffer[]
+  purchases  Purchase[]
+  benefits   IssuedBenefit[]
+
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, category, status, createdAt])
+}
+
+model SubOffer {
+  id        String         @id @default(uuid())
+  publicId  String         @unique
+  offerId   String
+  title     String
+  summary   String
+  terms     String
+  imageUrls Json
+  status    SubOfferStatus @default(ACTIVE)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  offer       Offer        @relation(fields: [offerId], references: [id])
+  costOptions CostOption[]
+  purchases   Purchase[]
+
+  @@index([offerId, status])
+}
+
+model CostOption {
+  id        String           @id @default(uuid())
+  subOfferId String
+  type      CostOptionType
+  cost      Decimal?         @db.Decimal(12, 2)
+  minAmount Decimal?         @db.Decimal(12, 2)
+  maxAmount Decimal?         @db.Decimal(12, 2)
+  currency  String           @default("ILS")
+  available Int
+  reserved  Int              @default(0)
+  sold      Int              @default(0)
+  status    CostOptionStatus @default(ACTIVE)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  subOffer  SubOffer   @relation(fields: [subOfferId], references: [id])
+  purchases Purchase[]
+
+  @@index([subOfferId, status])
+}
+
+model Purchase {
+  id                  String         @id @default(uuid())
+  publicId            String         @unique
+  tenantId            String
+  userId              String
+  offerId             String
+  subOfferId          String?
+  costOptionId        String?
+  userEmail           String
+  userEmailNormalized String
+  buyerName           String
+  buyerEmail          String
+  buyerPhone          String
+  amount              Decimal        @db.Decimal(12, 2)
+  currency            String
+  receiptFullName     String?
+  receiptEmail        String?
+  receiptPhone        String?
+  receiptNotes        String?
+  status              PurchaseStatus @default(PENDING_PAYMENT)
+  expiresAt           DateTime?
+  paidAt              DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  user           User            @relation(fields: [userId], references: [id])
+  offer          Offer           @relation(fields: [offerId], references: [id])
+  subOffer       SubOffer?       @relation(fields: [subOfferId], references: [id])
+  costOption     CostOption?     @relation(fields: [costOptionId], references: [id])
+  paymentSession PaymentSession?
+  issuedBenefit  IssuedBenefit?
+
+  @@index([tenantId, userEmail])
+  @@index([tenantId, userEmailNormalized, status, createdAt])
+  @@index([tenantId, userId, status, createdAt])
+  @@index([tenantId, offerId, status, createdAt])
+  @@index([tenantId, paidAt])
+  @@index([tenantId, offerId, paidAt])
+}
+
+model PaymentSession {
+  id                  String               @id @default(uuid())
+  purchaseId          String               @unique
+  provider            PaymentProviderName  @default(PAYME)
+  providerEnvironment ProviderEnvironment
+  providerSessionId   String?
+  providerSaleId      String?
+  checkoutUrl         String
+  status              PaymentSessionStatus @default(CREATED)
+  requestPayload      Json
+  responsePayload     Json
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id])
+
+  @@index([provider, providerSessionId])
+  @@index([provider, providerSaleId])
+  @@index([purchaseId])
+}
+
+model IssuedBenefit {
+  id                   String        @id @default(uuid())
+  purchaseId           String        @unique
+  offerId              String
+  tenantId             String
+  userEmail            String
+  userEmailNormalized  String
+  benefitType          OfferType
+  codeHash             String?
+  codeLast4            String?
+  displayCodeEncrypted String?
+  status               BenefitStatus @default(ACTIVE)
+  issuedAt             DateTime      @default(now())
+  expiresAt            DateTime
+  usedAt               DateTime?
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id])
+  offer    Offer    @relation(fields: [offerId], references: [id])
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, userEmail, status])
+  @@index([tenantId, userEmailNormalized, status])
+  @@index([tenantId, offerId, status])
+}
+
+model WebhookEvent {
+  id              String              @id @default(uuid())
+  provider        PaymentProviderName @default(PAYME)
+  eventId         String?
+  bodyHash        String              @unique
+  signatureValid  Boolean
+  payload         Json
+  processedAt     DateTime?
+  processingError String?
+  createdAt       DateTime            @default(now())
+
+  @@index([provider, eventId])
+  @@index([provider, createdAt])
+}

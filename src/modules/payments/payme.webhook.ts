@@ -1,0 +1,126 @@
+/** This file processes PayMe webhook events and issues benefits after payment. */
+import type { Prisma } from "@prisma/client";
+import type { FastifyInstance } from "fastify";
+import { prisma } from "../../db/prisma.js";
+import { AppError } from "../../shared/errors.js";
+import { createPublicId } from "../../shared/ids.js";
+import { decimalToNumber, moneyEquals, toMoneyDecimal } from "../../shared/money.js";
+import { redactSensitive, sha256 } from "../../shared/security.js";
+import { paymentProvider } from "./payme.client.js";
+import type { ParsedPaymentEvent } from "./payment-provider.js";
+
+/** Adds POST /webhooks/payme for payment status callbacks. */
+export async function registerPayMeWebhookRoute(app: FastifyInstance): Promise<void> {
+  app.post("/webhooks/payme", async (request) => {
+    const rawBody = JSON.stringify(request.body ?? {});
+    const bodyHash = sha256(rawBody);
+    const signatureValid = await paymentProvider.verifyWebhook(request.headers, rawBody);
+
+    if (!signatureValid) {
+      throw new AppError("UNAUTHORIZED", "Webhook signature is invalid");
+    }
+
+    const existingEvent = await prisma.webhookEvent.findUnique({ where: { bodyHash } });
+    if (existingEvent?.processedAt) {
+      return { status: "ok", duplicate: true };
+    }
+
+    const parsedEvent = await paymentProvider.parseWebhook(rawBody);
+    const event = existingEvent ?? await prisma.webhookEvent.create({
+      data: {
+        eventId: parsedEvent.eventId ?? null,
+        bodyHash,
+        signatureValid,
+        payload: redactSensitive(parsedEvent.rawPayload) as object,
+      },
+    });
+
+    try {
+      await applyPaymentEvent(parsedEvent);
+      await prisma.webhookEvent.update({
+        where: { id: event.id },
+        data: { processedAt: new Date(), processingError: null },
+      });
+      return { status: "ok" };
+    } catch (error) {
+      await prisma.webhookEvent.update({
+        where: { id: event.id },
+        data: { processingError: error instanceof Error ? error.message : "Unknown webhook processing error" },
+      });
+      throw error;
+    }
+  });
+}
+
+/** Applies a validated provider event to purchase, payment, and benefit records. */
+async function applyPaymentEvent(event: ParsedPaymentEvent): Promise<void> {
+  const purchase = await prisma.purchase.findUnique({
+    where: { id: event.purchaseId },
+    include: { offer: true, paymentSession: true },
+  });
+
+  if (!purchase || !purchase.paymentSession) {
+    throw new AppError("NOT_FOUND", "Payment purchase was not found");
+  }
+
+  if (!moneyEquals(purchase.amount, toMoneyDecimal(event.amount)) || purchase.currency !== event.currency) {
+    throw new AppError("BAD_REQUEST", "Webhook amount or currency does not match purchase");
+  }
+
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    if (event.status === "paid") {
+      if (purchase.status === "PAID") {
+        return;
+      }
+
+      await tx.purchase.update({
+        where: { id: purchase.id },
+        data: { status: "PAID", paidAt: new Date() },
+      });
+      await tx.paymentSession.update({
+        where: { purchaseId: purchase.id },
+        data: { status: "PAID" },
+      });
+
+      if (purchase.costOptionId) {
+        await tx.costOption.update({
+          where: { id: purchase.costOptionId },
+          data: { sold: { increment: 1 } },
+        });
+      }
+
+      await tx.issuedBenefit.upsert({
+        where: { purchaseId: purchase.id },
+        update: {},
+        create: {
+          purchaseId: purchase.id,
+          offerId: purchase.offerId,
+          tenantId: purchase.tenantId,
+          userEmail: purchase.userEmail,
+          userEmailNormalized: purchase.userEmailNormalized,
+          benefitType: purchase.offer.offerType,
+          codeHash: sha256(createPublicId("benefit")),
+          codeLast4: purchase.id.slice(-4),
+          status: "ACTIVE",
+          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        },
+      });
+      return;
+    }
+
+    const failedStatus = event.status.toUpperCase() as "FAILED" | "CANCELLED" | "EXPIRED" | "REFUNDED";
+    await tx.purchase.update({
+      where: { id: purchase.id },
+      data: { status: failedStatus },
+    });
+    await tx.paymentSession.update({
+      where: { purchaseId: purchase.id },
+      data: { status: failedStatus === "REFUNDED" ? "FAILED" : failedStatus },
+    });
+  });
+}
+
+/** Converts a Decimal into an API number to keep this import used in build checks. */
+export function webhookAmountToNumberForDocs(value: Parameters<typeof decimalToNumber>[0]): number {
+  return decimalToNumber(value);
+}
