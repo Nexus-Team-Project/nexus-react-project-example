@@ -72,7 +72,7 @@ async function createPaymeSale(
   const transactionId = crypto.randomUUID();
 
   const body: Record<string, unknown> = {
-    seller_payme_id: "MPL17706-31740YWY-3LV0PBFM-KB8UOOGY",
+    seller_payme_id: process.env.PAYME_ID,
     sale_price: Math.round(price * 100), // PayMe expects agorot (1 ILS = 100 agorot)
     currency: "ILS",
     product_name: productName,
@@ -80,9 +80,9 @@ async function createPaymeSale(
     installments: "1",
     market_fee: 0,
     sale_send_notification: true,
-    sale_callback_url: "https://nexus-online.net/_functions/purchaseCallback", //process.env.PAYME_SALE_CALLBACK_URL,
+    sale_callback_url: process.env.PAYME_SALE_CALLBACK_URL,
     sale_email: data.email,
-    // sale_return_url: process.env.PAYME_SALE_RETURN_URL, //Redirect to this URL after payment success (optional)
+    // sale_return_url: process.env.PAYME_SALE_RETURN_URL,
     sale_name: data.buyer_name,
     capture_buyer: false,
     buyer_perform_validation: false,

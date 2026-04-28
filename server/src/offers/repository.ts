@@ -9,11 +9,12 @@ export function getOfferDetails(offerId: string) {
     where: { id: offerId },
     select: {
       id: true,
+      title: true,
+      subtitle: true,
       variants: {
         select: {
           id: true,
           images: true,
-          combination: true,
           summary: true,
           terms: true,
           price: true,

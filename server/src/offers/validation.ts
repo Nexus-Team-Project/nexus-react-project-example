@@ -14,10 +14,6 @@ const querySchema = z.object({
   category: z.string().optional(),
 });
 
-const statsParamsSchema = z.object({
-  tenantId: z.string().min(1, "Tenant ID is required"),
-});
-
 const statsQuerySchema = z.object({
   startDate: z.string().datetime({ offset: true }).optional(),
   endDate: z.string().datetime({ offset: true }).optional(),
@@ -25,13 +21,9 @@ const statsQuerySchema = z.object({
 });
 
 export function validateStatsRequest(req: Request) {
-  const paramsResult = statsParamsSchema.safeParse(req.params);
-  if (!paramsResult.success) {
-    throw new AppError(
-      400,
-      "INVALID_PARAMETERS",
-      paramsResult.error.issues[0].message,
-    );
+  const tenant = req.params.tenant;
+  if (!tenant) {
+    throw new AppError(400, "INVALID_PARAMETERS", "Tenant is required");
   }
 
   const queryResult = statsQuerySchema.safeParse(req.query);
@@ -43,11 +35,10 @@ export function validateStatsRequest(req: Request) {
     );
   }
 
-  const { tenantId } = paramsResult.data;
   const { startDate, endDate, offerId } = queryResult.data;
 
   return {
-    tenantId,
+    tenantId: tenant,
     startDate: startDate ? new Date(startDate) : undefined,
     endDate: endDate ? new Date(endDate) : undefined,
     offerId,

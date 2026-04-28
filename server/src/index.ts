@@ -26,6 +26,7 @@ app.use("/offers", offersRouter);
 app.use("/purchase", purchaseRouter);
 app.use("/users", usersRouter);
 
+
 // Global error handler — must be registered after all routes
 app.use(errorHandler);
 

@@ -1,16 +1,13 @@
 // routes/offers.ts
 import { Router, Request, Response, NextFunction } from "express";
 import {
-  validateOfferRequest,
   validateStatsRequest,
-  validateUserOffersStatusRequest,
   validateCreateOfferRequest,
   validateAdoptVariantRequest,
   validateBulkCreateOffersRequest,
 } from "../offers/validation";
 import {
   getTenantAvailableOffers,
-  getTenantUsedOffers,
   getOfferDetails,
   getOffersStats,
   getUserPurchasedOffersStatus,
@@ -21,180 +18,139 @@ import logger from "../logger";
 
 const router = Router();
 
-router.get(
-  "/getTenantUsedOffers/:tenantId",
-  async (req: Request, res: Response) => {
-    try {
-      const { error, data } = validateOfferRequest(req);
-      if (error) {
-        return res.status(error.status).json({
-          error: error.message,
-          details: error.details,
-        });
-      }
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-      const tenantUsedOffers = await getTenantUsedOffers(
-        data.tenantId,
-        data.category,
-        data.page,
-        data.pageSize,
-      );
-
-      logger.info("Fetched tenant used offers", {
-        tenantId: data.tenantId,
-        count: tenantUsedOffers.length,
-      });
-      res.json(tenantUsedOffers);
-    } catch (error) {
-      logger.error("Failed to fetch tenant used offers", {
-        error,
-        tenantId: req.params.tenantId,
-      });
-      res.status(500).json({ error: "Failed to fetch offers" });
-    }
-  },
-);
-
-router.get(
-  "/getTenantAvailableOffers/:tenantId",
-  async (req: Request, res: Response) => {
-    try {
-      const { error, data } = validateOfferRequest(req);
-      if (error) {
-        return res.status(error.status).json({
-          error: error.message,
-          details: error.details,
-        });
-      }
-      const availableOffers = await getTenantAvailableOffers(
-        data.tenantId,
-        data.category,
-        data.page,
-        data.pageSize,
-      );
-      logger.info("Fetched tenant available offers", {
-        tenantId: data.tenantId,
-        count: availableOffers.length,
-      });
-      res.json(availableOffers);
-    } catch (error) {
-      logger.error("Failed to fetch tenant available offers", {
-        error,
-        tenantId: req.params.tenantId,
-      });
-      res.status(500).json({ error: "Failed to fetch offers" });
-    }
-  },
-);
-
-router.get("/status/:tenantId", async (req: Request, res: Response) => {
+// GET /offers/status/:tenant
+router.get("/status/:tenant", async (req: Request, res: Response) => {
   try {
     const params = validateStatsRequest(req);
     const stats = await getOffersStats(params);
     logger.info("Fetched offer statistics", {
-      tenantId: req.params.tenantId,
+      tenantId: params.tenantId,
       count: stats.length,
     });
     res.json({ stats });
   } catch (error) {
-    logger.error("Failed to fetch offer statistics", {
-      error,
-      tenantId: req.params.tenantId,
-    });
+    logger.error("Failed to fetch offer statistics", { error });
     res.status(500).json({ error: "Failed to fetch offer statistics" });
   }
 });
 
-router.get(
-  "/status/:tenant/:userEmail",
-  async (req: Request, res: Response) => {
-    try {
-      const { tenant, userEmail } = validateUserOffersStatusRequest(req);
-      const purchases = await getUserPurchasedOffersStatus(tenant, userEmail);
-      const now = new Date();
-
-      const purchasedOffers = purchases.map((purchase) => {
-        const offerType = purchase.offer?.type;
-        let status: "active" | "expired" = "active";
-
-        if (offerType === "Voucher") {
-          status =
-            purchase.expiration_date && purchase.expiration_date < now
-              ? "expired"
-              : "active";
-        } else if (offerType === "Coupon") {
-          status =
-            purchase.offer?.expiration_date &&
-            purchase.offer.expiration_date < now
-              ? "expired"
-              : "active";
-        }
-
-        return {
-          offerVariantId: purchase.offer_variant_id,
-          offerId: purchase.offer_id,
-          title: purchase.offer?.title ?? "",
-          purchaseDate: purchase.created_at.toISOString(),
-          expiryDate: purchase.expiration_date?.toISOString() ?? null,
-          status,
-          amount: Number(purchase.amount),
-        };
-      });
-
-      logger.info("Fetched user purchased offers status", {
-        tenant,
-        userEmail,
-        count: purchasedOffers.length,
-      });
-      res.json({ purchasedOffers });
-    } catch (error) {
-      logger.error("Failed to fetch user purchased offers status", {
-        error,
-        tenant: req.params.tenant,
-        userEmail: req.params.userEmail,
-      });
-      res
-        .status(500)
-        .json({ error: "Failed to fetch purchased offers status" });
-    }
-  },
-);
-
-router.get("/:offerId", async (req: Request, res: Response) => {
+// GET /offers/status/:tenant/:userEmail
+router.get("/status/:tenant/:userEmail", async (req: Request, res: Response) => {
+  const { tenant, userEmail } = req.params;
   try {
-    const { offerId } = req.params;
-    const offer = await getOfferDetails(offerId);
+    const purchases = await getUserPurchasedOffersStatus(tenant, userEmail);
+    const now = new Date();
 
-    if (!offer) {
-      logger.warn("Offer not found", { offerId });
-      return res.status(404).json({ error: "Offer not found" });
-    }
+    const purchasedOffers = purchases.map((purchase) => {
+      const offerType = purchase.offer?.type;
+      let status: "active" | "expired" = "active";
 
-    const result = {
-      offerId: offer.id,
-      variants: offer.variants.map((offerVariant) => ({
-        variantId: offerVariant.id,
-        images: offerVariant.images,
-        combination: offerVariant.combination,
-        summary: offerVariant.summary,
-        terms: offerVariant.terms,
-        price: Number(offerVariant.price),
-        stock_quantity: offerVariant.stock_quantity,
-      })),
-    };
-    logger.info("Fetched offer details", {
-      offerId,
-      variantCount: result.variants.length,
+      if (offerType === "Voucher") {
+        status = purchase.expiration_date && purchase.expiration_date < now ? "expired" : "active";
+      } else if (offerType === "Coupon") {
+        status = purchase.offer?.expiration_date && purchase.offer.expiration_date < now ? "expired" : "active";
+      }
+
+      return {
+        offerId: purchase.offer_id,
+        title: purchase.offer?.title ?? "",
+        purchaseDate: purchase.created_at.toISOString(),
+        expiryDate: purchase.expiration_date?.toISOString() ?? null,
+        status,
+        amount: Number(purchase.amount),
+      };
     });
-    res.json(result);
+
+    logger.info("Fetched user purchased offers status", { tenant, userEmail, count: purchasedOffers.length });
+    res.json({ purchasedOffers });
   } catch (error) {
-    logger.error("Failed to fetch offer details", {
-      error,
-      offerId: req.params.offerId,
-    });
-    res.status(500).json({ error: "Failed to fetch offer details" });
+    logger.error("Failed to fetch user purchased offers status", { error });
+    res.status(500).json({ error: "Failed to fetch purchased offers status" });
   }
 });
+
+
+// GET /offers/:id
+// If :id is a UUID → return offer details (GET /offers/{offerId})
+// If :id is a string (tenant external ID) → return tenant's offer list (GET /offers/{tenantId})
+router.get("/:id", async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { page, pageSize, category } = req.query as Record<string, string>;
+
+  if (UUID_REGEX.test(id)) {
+    // ── Offer detail ────────────────────────────────────────────────────────
+    try {
+      const offer = await getOfferDetails(id);
+
+      if (!offer) {
+        logger.warn("Offer not found", { offerId: id });
+        return res.status(404).json({ error: "Offer not found" });
+      }
+
+      res.json({
+        offerId: offer.id,
+        subOffers: offer.variants.map((v) => ({
+          subOfferId: v.id,
+          images: v.images,
+          title: offer.title,
+          summary: v.summary ?? offer.subtitle ?? "",
+          terms: v.terms ?? "",
+          costOptions: [
+            {
+              type: "fixed",
+              cost: Number(v.price),
+              available: v.stock_quantity,
+            },
+          ],
+        })),
+      });
+
+      logger.info("Fetched offer details", {
+        offerId: id,
+        variantCount: offer.variants.length,
+      });
+    } catch (error) {
+      logger.error("Failed to fetch offer details", { error, offerId: id });
+      res.status(500).json({ error: "Failed to fetch offer details" });
+    }
+  } else {
+    // ── Tenant offer list ────────────────────────────────────────────────────
+    try {
+      const offers = await getTenantAvailableOffers(
+        id,
+        category,
+        page ? Number(page) : undefined,
+        pageSize ? Number(pageSize) : undefined,
+      );
+
+      logger.info("Fetched tenant available offers", {
+        tenantId: id,
+        count: offers.length,
+      });
+
+      res.json({
+        offers: offers.map((o) => ({
+          offerId: o.id,
+          image: o.images ?? "",
+          title: o.title,
+          summary: o.subtitle ?? "",
+          price: o.variants.length > 0 ? Number(o.variants[0].price) : 0,
+        })),
+      });
+    } catch (error) {
+      logger.error("Failed to fetch tenant available offers", {
+        error,
+        tenantId: id,
+      });
+      res.status(500).json({ error: "Failed to fetch offers" });
+    }
+  }
+});
+
+// ── Internal / admin routes (not in public docs) ─────────────────────────────
 
 router.post(
   "/adopt-variant",
@@ -228,7 +184,8 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const data = validateCreateOfferRequest(req);
-      const { offer, variants, voucherAdmins, voucherCodes } = await createOffer(data);
+      const { offer, variants, voucherAdmins, voucherCodes } =
+        await createOffer(data);
 
       logger.info("POST /create-offer succeeded", {
         offerId: offer.id,

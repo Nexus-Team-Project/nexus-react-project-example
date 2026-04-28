@@ -5,8 +5,8 @@ import { AppError } from "../errors/AppError";
 const bodyParamsSchema = z
   .object({
     tenantId: z.string(),
-    offerId: z.uuid("Invalid offer ID format").optional(),
-    offerVariantId: z.uuid("Invalid offer variant ID format"),
+    offerId: z.string().min(1).optional(),
+    offerVariantId: z.string().min(1),
     email: z.email("Invalid email format"),
     // amount is intentionally NOT accepted from the client.
     // The server computes it from the variant and tenant delta.
