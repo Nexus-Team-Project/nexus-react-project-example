@@ -53,7 +53,7 @@ export async function registerPayMeWebhookRoute(app: FastifyInstance): Promise<v
 }
 
 /** Applies a validated provider event to purchase, payment, and benefit records. */
-async function applyPaymentEvent(event: ParsedPaymentEvent): Promise<void> {
+export async function applyPaymentEvent(event: ParsedPaymentEvent): Promise<void> {
   const purchase = await prisma.purchase.findUnique({
     where: { id: event.purchaseId },
     include: { offer: true, paymentSession: true },
