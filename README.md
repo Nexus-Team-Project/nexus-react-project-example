@@ -1,67 +1,70 @@
-# 🚀 Simple React + TypeScript + Vite Starter
+# Nexus React Project
 
-A minimalist, modern web application bootstrapped with **React**, **TypeScript**, and **Vite**. This project is ideal for learning, rapid prototyping, or as a clean foundation for production apps and CI/CD pipelines.
+## Local Setup
 
-## ✨ Features
+### Prerequisites
 
-- ⚛️ **React 18+**: Component-based UI development
-- 📘 **TypeScript**: Type-safe, scalable code
-- 💨 **Vite**: Lightning-fast dev server and optimized builds
-- 🎨 **Modern CSS**: Clean, responsive UI
-- 🧪 **Ready for CI/CD**: Simple structure for automated testing and deployment
+- Node.js
+- PostgreSQL installed and running locally
 
-## 📦 Technologies Used
+---
 
-- [React](https://react.dev/)
-- [TypeScript](https://www.typescriptlang.org/)
-- [Vite](https://vitejs.dev/)
-- [npm](https://www.npmjs.com/) or [Yarn](https://yarnpkg.com/)
+### 1. Environment Variables
 
-## 📁 Project Structure
+Copy the example env file and fill in your values:
 
-```
-├── public/
-│   └── index.html         # HTML entrypoint (Vite template)
-├── src/
-│   ├── app.tsx            # Main App component
-│   ├── index.css          # Global styles
-│   └── main.tsx           # React/Vite entrypoint
-├── package.json           # Scripts and dependencies
-├── tsconfig.json          # TypeScript config
-├── vite.config.ts         # Vite config
-└── README.md              # Project info
-```
-
-## 🚀 Getting Started
-
-### 1. Install dependencies
 ```bash
-npm install
+cp server/.env.example server/.env
 ```
 
-### 2. Start the development server
+Then edit `server/.env`:
+
+```env
+DATABASE_URL="postgresql://<user>:<password>@localhost:5432/nexusdb?schema=public"
+PAYME_API_URL_DEV="https://sandbox.payme.io/api/generate-sale"
+PAYME_API_URL_PROD=""
+PAYME_ID=""
+PAYME_SALE_CALLBACK_URL=""
+```
+
+Replace `<user>` and `<password>` with your local PostgreSQL credentials.
+Make sure a database named `nexusdb` exists, or create one:
+
+```sql
+CREATE DATABASE nexusdb;
+```
+
+---
+
+### 2. Install Dependencies
+
 ```bash
+# Server
+cd server && npm install
+
+# Client
+cd client && npm install
+```
+
+---
+
+### 3. Run Migrations
+
+```bash
+cd server
+npx prisma migrate dev
+```
+
+---
+
+### 4. Start the App
+
+```bash
+# Server (from server/)
+npm start
+
+# Client (from client/)
 npm run dev
 ```
-Open [http://localhost:5173](http://localhost:5173) to view the app.
 
-### 3. Build for production
-```bash
-npm run build
-```
-
-### 4. Preview the production build
-```bash
-npm run preview
-```
-
-## 🛠️ Available Scripts
-- `npm run dev` – Start dev server with hot reload
-- `npm run build` – Build for production
-- `npm run preview` – Preview production build
-
-## 🧪 CI/CD Ready
-This project is designed for easy integration with CI/CD pipelines. Use the provided scripts for automated testing and deployment.
-
-## 📄 License
-MIT
+Client runs on `http://localhost:3000`.
