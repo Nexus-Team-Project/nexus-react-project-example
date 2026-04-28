@@ -48,8 +48,8 @@ export async function createPurchase(input: PurchaseRequest): Promise<{ paymentS
 
   const publicId = createPublicId("purchase");
   const purchase = await getPurchasePrisma().$transaction(async (tx: Prisma.TransactionClient) => {
-    const freshOption = await tx.costOption.findUnique({ where: { id: selected.costOption.id } });
-    if (!freshOption || freshOption.status !== "ACTIVE" || freshOption.available - freshOption.reserved - freshOption.sold <= 0) {
+    const reservedCount = await reserveCostOption(tx, selected.costOption.id);
+    if (reservedCount !== 1) {
       throw new AppError("CONFLICT", "Offer is no longer available");
     }
 
@@ -97,7 +97,7 @@ export async function createPurchase(input: PurchaseRequest): Promise<{ paymentS
     callbackUrl: `${env.PUBLIC_API_BASE_URL}/webhooks/payme`,
   };
 
-  const paymentSession = await paymentProvider.createPaymentSession(paymentInput);
+  const paymentSession = await createProviderPaymentSessionOrReleaseReservation(paymentInput, purchase.id, selected.costOption.id);
   await createPaymentSessionRecord({
     purchaseId: purchase.id,
     providerEnvironment: env.PAYME_ENV === "production" ? "PRODUCTION" : "SANDBOX",
@@ -109,6 +109,51 @@ export async function createPurchase(input: PurchaseRequest): Promise<{ paymentS
   });
 
   return { paymentSessionUrl: paymentSession.checkoutUrl };
+}
+
+/** Creates the provider checkout session or releases the local reservation if no session exists. */
+async function createProviderPaymentSessionOrReleaseReservation(
+  paymentInput: Parameters<typeof paymentProvider.createPaymentSession>[0],
+  purchaseId: string,
+  costOptionId: string,
+): ReturnType<typeof paymentProvider.createPaymentSession> {
+  try {
+    return await paymentProvider.createPaymentSession(paymentInput);
+  } catch (error) {
+    await releasePendingPurchaseReservation(purchaseId, costOptionId);
+    throw error;
+  }
+}
+
+/** Atomically reserves one available unit for a pending purchase. */
+async function reserveCostOption(tx: Prisma.TransactionClient, costOptionId: string): Promise<number> {
+  return tx.$executeRaw`
+    UPDATE "CostOption"
+    SET "reserved" = "reserved" + 1
+    WHERE "id" = ${costOptionId}
+      AND "status" = 'ACTIVE'
+      AND "available" > ("reserved" + "sold")
+  `;
+}
+
+/** Marks checkout setup failures and releases the unit held by the pending purchase. */
+async function releasePendingPurchaseReservation(purchaseId: string, costOptionId: string): Promise<void> {
+  await getPurchasePrisma().$transaction(async (tx: Prisma.TransactionClient) => {
+    const transition = await tx.purchase.updateMany({
+      where: { id: purchaseId, status: "PENDING_PAYMENT" },
+      data: { status: "FAILED" },
+    });
+
+    if (transition.count !== 1) {
+      return;
+    }
+
+    await tx.$executeRaw`
+      UPDATE "CostOption"
+      SET "reserved" = GREATEST("reserved" - 1, 0)
+      WHERE "id" = ${costOptionId}
+    `;
+  });
 }
 
 /** Selects the active cost option that supports the requested amount. */

@@ -69,24 +69,23 @@ export async function applyPaymentEvent(event: ParsedPaymentEvent): Promise<void
 
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     if (event.status === "paid") {
-      if (purchase.status === "PAID") {
+      const transition = await tx.purchase.updateMany({
+        where: { id: purchase.id, status: "PENDING_PAYMENT" },
+        data: { status: "PAID", paidAt: new Date() },
+      });
+
+      if (transition.count !== 1) {
+        await ensurePaidEventIsIdempotent(tx, purchase.id);
         return;
       }
 
-      await tx.purchase.update({
-        where: { id: purchase.id },
-        data: { status: "PAID", paidAt: new Date() },
-      });
       await tx.paymentSession.update({
         where: { purchaseId: purchase.id },
         data: { status: "PAID" },
       });
 
       if (purchase.costOptionId) {
-        await tx.costOption.update({
-          where: { id: purchase.costOptionId },
-          data: { sold: { increment: 1 } },
-        });
+        await convertReservedUnitToSold(tx, purchase.costOptionId);
       }
 
       await tx.issuedBenefit.upsert({
@@ -109,15 +108,58 @@ export async function applyPaymentEvent(event: ParsedPaymentEvent): Promise<void
     }
 
     const failedStatus = event.status.toUpperCase() as "FAILED" | "CANCELLED" | "EXPIRED" | "REFUNDED";
-    await tx.purchase.update({
-      where: { id: purchase.id },
+    const transition = await tx.purchase.updateMany({
+      where: { id: purchase.id, status: "PENDING_PAYMENT" },
       data: { status: failedStatus },
     });
+
+    if (transition.count !== 1) {
+      return;
+    }
+
     await tx.paymentSession.update({
       where: { purchaseId: purchase.id },
       data: { status: failedStatus === "REFUNDED" ? "FAILED" : failedStatus },
     });
+
+    if (purchase.costOptionId) {
+      await releaseReservedUnit(tx, purchase.costOptionId);
+    }
   });
+}
+
+/** Allows duplicate paid events only when the purchase is already marked as paid. */
+async function ensurePaidEventIsIdempotent(tx: Prisma.TransactionClient, purchaseId: string): Promise<void> {
+  const current = await tx.purchase.findUnique({
+    where: { id: purchaseId },
+    select: { status: true },
+  });
+
+  if (current?.status === "PAID") {
+    return;
+  }
+
+  throw new AppError("CONFLICT", "Purchase cannot be marked paid from its current status");
+}
+
+/** Converts one reserved unit into one sold unit after a successful payment transition. */
+async function convertReservedUnitToSold(tx: Prisma.TransactionClient, costOptionId: string): Promise<void> {
+  await tx.$executeRaw`
+    UPDATE "CostOption"
+    SET
+      "reserved" = GREATEST("reserved" - 1, 0),
+      "sold" = "sold" + 1
+    WHERE "id" = ${costOptionId}
+  `;
+}
+
+/** Releases one reserved unit after a pending purchase reaches a non-paid terminal state. */
+async function releaseReservedUnit(tx: Prisma.TransactionClient, costOptionId: string): Promise<void> {
+  await tx.$executeRaw`
+    UPDATE "CostOption"
+    SET "reserved" = GREATEST("reserved" - 1, 0)
+    WHERE "id" = ${costOptionId}
+  `;
 }
 
 /** Converts a Decimal into an API number to keep this import used in build checks. */
