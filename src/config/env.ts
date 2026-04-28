@@ -14,6 +14,7 @@ const envSchema = z.object({
   PAYME_BASE_URL: z.string().min(1),
   PAYME_SELLER_ID: z.string().min(1),
   PAYME_WEBHOOK_SECRET: z.string().min(1),
+  PAYME_REQUIRE_WEBHOOK_SIGNATURE: z.coerce.boolean().default(true),
   PUBLIC_API_BASE_URL: z.string().url(),
   PAYMENT_SUCCESS_URL: z.string().url(),
   PAYMENT_FAILURE_URL: z.string().url(),

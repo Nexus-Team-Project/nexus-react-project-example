@@ -47,7 +47,7 @@ export class PayMeClient implements PaymentProvider {
     const signatureValue = Array.isArray(signature) ? signature[0] : signature;
 
     if (!signatureValue) {
-      return env.NODE_ENV !== "production";
+      return !env.PAYME_REQUIRE_WEBHOOK_SIGNATURE;
     }
 
     const expected = createHmac("sha256", env.PAYME_WEBHOOK_SECRET).update(rawBody).digest("hex");

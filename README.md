@@ -165,3 +165,11 @@ Still confirm from PayMe before production use:
 - callback payload fields and exact paid/failed status values
 - callback signature header and algorithm
 - idempotency support for duplicate `transaction_id`
+
+For sandbox testing before PayMe signature details are confirmed, set:
+
+```env
+PAYME_REQUIRE_WEBHOOK_SIGNATURE=false
+```
+
+For real production payments, set it to `true` after the webhook signature format is implemented and verified.
