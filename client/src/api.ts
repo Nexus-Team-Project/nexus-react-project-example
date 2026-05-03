@@ -103,7 +103,9 @@ export async function getStats(token: string, tenantId: string): Promise<OfferSt
 /** Sends an API request with JSON headers and converts safe error bodies into exceptions. */
 async function apiFetch<T>(path: string, options: RequestInit & { token?: string } = {}): Promise<T> {
   const headers = new Headers(options.headers);
-  headers.set("Content-Type", "application/json");
+  if (options.body) {
+    headers.set("Content-Type", "application/json");
+  }
   if (options.token) {
     headers.set("Authorization", `Bearer ${options.token}`);
   }
