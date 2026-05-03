@@ -30,6 +30,7 @@ export async function resolveOfferRoute(input: {
         title: offer.title,
         summary: offer.summary,
         price: getVisiblePrice(offer),
+        available: getRemainingUnits(offer),
       })),
     };
   }
@@ -77,6 +78,13 @@ function getVisiblePrice(offer: ListedOffer): number {
   const customMinimums = costs.filter((option) => option.type === "CUSTOM" && option.minAmount).map((option) => option.minAmount!);
   const candidates = [...fixedCosts, ...customMinimums].sort((left, right) => left.comparedTo(right));
   return candidates[0] ? decimalToNumber(candidates[0]) : 0;
+}
+
+/** Returns total unsold and unreserved units across active cost options. */
+function getRemainingUnits(offer: ListedOffer): number {
+  return offer.subOffers
+    .flatMap((subOffer) => subOffer.costOptions)
+    .reduce((total, option) => total + Math.max(option.available - option.reserved - option.sold, 0), 0);
 }
 
 /** Safely parses JSON image arrays from Prisma into string arrays. */

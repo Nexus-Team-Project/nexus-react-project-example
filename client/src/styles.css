@@ -277,7 +277,7 @@ p {
 
 .offer-row {
   display: grid;
-  grid-template-columns: 64px 1fr auto;
+  grid-template-columns: 64px 1fr auto auto;
   gap: 12px;
   align-items: center;
   width: 100%;
@@ -302,6 +302,14 @@ p {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.offer-row em {
+  border: 1px solid #191919;
+  padding: 4px 7px;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 800;
 }
 
 .checkout-line {

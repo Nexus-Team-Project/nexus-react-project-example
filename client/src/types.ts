@@ -22,6 +22,7 @@ export interface OfferSummary {
   title: string;
   summary: string;
   price: number;
+  available: number;
 }
 
 export interface CostOption {

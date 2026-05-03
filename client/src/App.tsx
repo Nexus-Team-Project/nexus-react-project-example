@@ -112,6 +112,20 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
     setCheckoutUrl(null);
   }, [checkoutUrl, isUser, oneTimeBarcode, purchasesQuery.data, session.account.email]);
 
+  useEffect(() => {
+    function handlePaymentResult(event: MessageEvent<unknown>): void {
+      if (!isPaymentResultMessage(event.data)) {
+        return;
+      }
+
+      setCheckoutUrl(null);
+      void purchasesQuery.refetch();
+    }
+
+    window.addEventListener("message", handlePaymentResult);
+    return () => window.removeEventListener("message", handlePaymentResult);
+  }, [purchasesQuery]);
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -137,6 +151,7 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
                   <small>{offer.summary}</small>
                 </span>
                 <b>{formatIls(offer.price)}</b>
+                <em>{offer.available} left</em>
               </button>
             ))}
           </div>
@@ -169,7 +184,7 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
               )}
             </>
           ) : (
-            <PartnerOfferPanel stats={statsQuery.data ?? []} />
+            <PartnerOfferPanel stats={statsQuery.data ?? []} offers={offersQuery.data ?? []} />
           )}
         </section>
       </section>
@@ -269,16 +284,15 @@ function PurchasesPanel(props: {
               <strong>{purchase.title}</strong>
               <small>{new Date(purchase.purchaseDate).toLocaleDateString()}</small>
             </span>
-            <div className="purchase-actions">
+            {props.visibleBarcode?.purchaseId === purchase.purchaseId ? (
+              <button className="secondary-action" onClick={props.onHide} type="button">
+                Hide barcode
+              </button>
+            ) : !props.visibleBarcode ? (
               <button className="secondary-action" onClick={() => void props.onReplay(purchase.purchaseId)} type="button">
                 Show barcode
               </button>
-              {props.visibleBarcode?.purchaseId === purchase.purchaseId ? (
-                <button className="secondary-action" onClick={props.onHide} type="button">
-                  Hide barcode
-                </button>
-              ) : null}
-            </div>
+            ) : null}
             {props.visibleBarcode?.purchaseId === purchase.purchaseId ? <BarcodeDisplay label={purchase.title} barcode={props.visibleBarcode.barcode} /> : null}
           </div>
         ))}
@@ -299,22 +313,29 @@ function BarcodeDisplay(props: { label: string; barcode: BarcodeValue }): JSX.El
 }
 
 /** Renders partner-only offer stats without purchase or barcode controls. */
-function PartnerOfferPanel(props: { stats: Array<{ offerId: string; title: string; numberOfUsers: number; userEmails: string[]; totalPurchaseAmount: number }> }): JSX.Element {
+function PartnerOfferPanel(props: { 
+  stats: Array<{ offerId: string; title: string; numberOfUsers: number; userEmails: string[]; totalPurchaseAmount: number }>;
+  offers: OfferSummary[];
+}): JSX.Element {
   return (
     <section className="tool-band">
       <SectionTitle icon={<Store aria-hidden="true" />} title="Partner stats" />
       <p className="muted">Partner accounts can view tenant offers and purchase totals. Purchases and barcodes belong to user accounts.</p>
-      {props.stats.length === 0 ? <p className="muted">No paid purchases yet.</p> : null}
-      {props.stats.map((stat) => (
-        <div className="stat-row" key={stat.offerId}>
-          <span>
-            <strong>{stat.title}</strong>
-            <small>{stat.userEmails.length > 0 ? stat.userEmails.join(", ") : "No buyers yet"}</small>
-          </span>
-          <b>{stat.numberOfUsers} users</b>
-          <b>{formatIls(stat.totalPurchaseAmount)}</b>
-        </div>
-      ))}
+      {props.offers.length === 0 ? <p className="muted">No offers found.</p> : null}
+      {props.offers.map((offer) => {
+        const stat = props.stats.find(s => s.offerId === offer.offerId) || { numberOfUsers: 0, totalPurchaseAmount: 0, userEmails: [] as string[] };
+        return (
+          <div className="stat-row" key={offer.offerId}>
+            <span>
+              <strong>{offer.title}</strong>
+              <small>{stat.userEmails.length > 0 ? stat.userEmails.join(", ") : "No buyers yet"}</small>
+            </span>
+            <b>{stat.numberOfUsers} users</b>
+            <b>{formatIls(stat.totalPurchaseAmount)}</b>
+            <b>{offer.available} left</b>
+          </div>
+        );
+      })}
     </section>
   );
 }
@@ -327,4 +348,16 @@ function getPurchaseAmount(option: { cost?: number; minAmount?: number } | undef
 /** Formats an ILS amount for compact UI labels. */
 function formatIls(value: number): string {
   return new Intl.NumberFormat("en-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 0 }).format(value);
+}
+
+/** Detects payment result messages sent by the iframe success and failure pages. */
+function isPaymentResultMessage(data: unknown): data is { type: "nexus-payment-result"; status: string } {
+  return (
+    typeof data === "object"
+    && data !== null
+    && "type" in data
+    && data.type === "nexus-payment-result"
+    && "status" in data
+    && typeof data.status === "string"
+  );
 }
