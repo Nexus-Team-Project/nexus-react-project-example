@@ -5,6 +5,28 @@ import { createOpaqueToken, sha256 } from "../src/shared/security.js";
 import { signTestToken } from "../src/modules/auth/token.service.js";
 
 const prisma = new PrismaClient();
+const CLOUDINARY_OFFERS_BASE_URL = "https://res.cloudinary.com/dyqjvjdlq/image/upload/offers";
+
+function offerImageUrl(fileName: string): string {
+  return `${CLOUDINARY_OFFERS_BASE_URL}/${fileName}.png`;
+}
+
+function subOfferImageUrl(publicId: string): string {
+  const fallbackOfferIdBySubOffer: Record<string, string> = {
+    sub_digital_voucher_199: "offer_digital_voucher",
+    sub_coupon_code_50: "offer_coupon_code",
+    sub_premium_voucher_349: "offer_premium_voucher",
+    sub_weekend_coupon_75: "offer_weekend_coupon",
+  };
+
+  const fallbackOfferId = fallbackOfferIdBySubOffer[publicId];
+
+  if (fallbackOfferId) {
+    return offerImageUrl(fallbackOfferId);
+  }
+
+  return `${CLOUDINARY_OFFERS_BASE_URL}/${publicId}.png`;
+}
 
 /** Seeds all local data needed for manual API verification. */
 async function seed(): Promise<void> {
@@ -32,7 +54,7 @@ async function seed(): Promise<void> {
     category: "voucher",
     title: "Digital Gift Card",
     summary: "Use this gift card across multiple partner stores",
-    imageUrl: "https://cdn.example.com/offers/offer_digital_voucher.jpg",
+    imageUrl: offerImageUrl("offer_digital_voucher"),
     offerType: "VOUCHER",
     subOfferPublicId: "sub_digital_voucher_199",
     subTitle: "199 NIS Digital Voucher",
@@ -46,7 +68,7 @@ async function seed(): Promise<void> {
     category: "coupon",
     title: "Coupon Code",
     summary: "Redeem a one-time DigiProduct coupon code",
-    imageUrl: "https://cdn.example.com/offers/offer_coupon_code.jpg",
+    imageUrl: offerImageUrl("offer_coupon_code"),
     offerType: "COUPON",
     subOfferPublicId: "sub_coupon_code_50",
     subTitle: "50 NIS Coupon",
@@ -60,7 +82,7 @@ async function seed(): Promise<void> {
     category: "voucher",
     title: "Premium Shopping Voucher",
     summary: "A higher-value voucher for DigiProduct partner stores",
-    imageUrl: "https://cdn.example.com/offers/offer_premium_voucher.jpg",
+    imageUrl: offerImageUrl("offer_premium_voucher"),
     offerType: "VOUCHER",
     subOfferPublicId: "sub_premium_voucher_349",
     subTitle: "349 NIS Premium Voucher",
@@ -74,7 +96,7 @@ async function seed(): Promise<void> {
     category: "coupon",
     title: "Weekend Coupon",
     summary: "A limited coupon for weekend DigiProduct purchases",
-    imageUrl: "https://cdn.example.com/offers/offer_weekend_coupon.jpg",
+    imageUrl: offerImageUrl("offer_weekend_coupon"),
     offerType: "COUPON",
     subOfferPublicId: "sub_weekend_coupon_75",
     subTitle: "75 NIS Weekend Coupon",
@@ -157,7 +179,7 @@ async function seedOffer(input: {
       title: input.subTitle,
       summary: "Use online or in-store",
       terms: "Valid for 12 months. Not combinable with other discounts.",
-      imageUrls: [`https://cdn.example.com/offers/${input.subOfferPublicId}/main.jpg`],
+      imageUrls: [subOfferImageUrl(input.subOfferPublicId)],
       status: "ACTIVE",
     },
   });
@@ -187,7 +209,7 @@ async function seedCustomOffer(tenantId: string): Promise<void> {
       category: "gift-card",
       title: "Custom Gift Card",
       summary: "Choose a custom DigiProduct gift-card amount",
-      imageUrl: "https://cdn.example.com/offers/offer_custom_gift_card.jpg",
+      imageUrl: offerImageUrl("offer_custom_gift_card"),
       offerType: "GIFT_CARD",
       status: "ACTIVE",
     },
@@ -202,7 +224,7 @@ async function seedCustomOffer(tenantId: string): Promise<void> {
       title: "Custom ILS Gift Card",
       summary: "Choose any amount from 100 to 1000 ILS",
       terms: "Valid for 12 months. The amount cannot be split after purchase.",
-      imageUrls: ["https://cdn.example.com/offers/sub_custom_gift_card/main.jpg"],
+      imageUrls: [subOfferImageUrl("sub_custom_gift_card")],
       status: "ACTIVE",
     },
   });
