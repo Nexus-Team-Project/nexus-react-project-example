@@ -1,7 +1,7 @@
 /** This file implements the Nexus demo UI for login, purchases, and barcodes. */
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Barcode, CreditCard, DoorOpen, Store, Ticket } from "lucide-react";
+import { Barcode, CreditCard, LogOut, Store, Ticket } from "lucide-react";
 import {
   createPurchase,
   getBarcode,
@@ -133,8 +133,8 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
           <span className="eyebrow">Nexus Demo</span>
           <h1>{session.account.displayName}</h1>
         </div>
-        <button className="icon-button" aria-label="Log out" onClick={() => logoutMutation.mutate()} type="button">
-          <DoorOpen aria-hidden="true" />
+        <button className="icon-button" aria-label="Log out" title="Log out" onClick={() => logoutMutation.mutate()} type="button">
+          <LogOut aria-hidden="true" />
         </button>
       </header>
       <section className="workspace">
