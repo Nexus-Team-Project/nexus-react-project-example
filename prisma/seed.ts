@@ -157,7 +157,7 @@ async function seedOffer(input: {
 }): Promise<void> {
   const offer = await prisma.offer.upsert({
     where: { publicId: input.publicId },
-    update: { status: "ACTIVE" },
+    update: { status: "ACTIVE", imageUrl: input.imageUrl },
     create: {
       publicId: input.publicId,
       tenantId: input.tenantId,
@@ -172,7 +172,7 @@ async function seedOffer(input: {
 
   const subOffer = await prisma.subOffer.upsert({
     where: { publicId: input.subOfferPublicId },
-    update: { status: "ACTIVE" },
+    update: { status: "ACTIVE", imageUrls: [subOfferImageUrl(input.subOfferPublicId)] },
     create: {
       publicId: input.subOfferPublicId,
       offerId: offer.id,
@@ -202,7 +202,7 @@ async function seedOffer(input: {
 async function seedCustomOffer(tenantId: string): Promise<void> {
   const offer = await prisma.offer.upsert({
     where: { publicId: "offer_custom_gift_card" },
-    update: { status: "ACTIVE" },
+    update: { status: "ACTIVE", imageUrl: offerImageUrl("offer_custom_gift_card") },
     create: {
       publicId: "offer_custom_gift_card",
       tenantId,
@@ -217,7 +217,7 @@ async function seedCustomOffer(tenantId: string): Promise<void> {
 
   const subOffer = await prisma.subOffer.upsert({
     where: { publicId: "sub_custom_gift_card" },
-    update: { status: "ACTIVE" },
+    update: { status: "ACTIVE", imageUrls: [subOfferImageUrl("sub_custom_gift_card")] },
     create: {
       publicId: "sub_custom_gift_card",
       offerId: offer.id,
