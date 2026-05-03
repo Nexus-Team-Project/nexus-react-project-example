@@ -239,20 +239,36 @@ p {
   background: #f3f4f6;
 }
 
-.topbar {
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 32px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #ffffff;
-}
-
 .eyebrow {
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #6b7280;
+}
+
+.topbar {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 32px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.tenant-badge-desktop {
+  display: none;
+}
+
+.tenant-badge-mobile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 6px 12px;
+  background: #f3f4f6;
+  border-radius: 8px;
 }
 
 .icon-button {
@@ -505,6 +521,23 @@ p {
 }
 
 @media (min-width: 720px) {
+  .tenant-badge-mobile {
+    display: none;
+  }
+
+  .tenant-badge-desktop {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 16px;
+    background: #f3f4f6;
+    border-radius: 8px;
+    text-align: center;
+  }
+
   .role-grid {
     grid-template-columns: repeat(2, 1fr);
   }

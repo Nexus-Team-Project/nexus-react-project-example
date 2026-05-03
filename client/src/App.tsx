@@ -130,12 +130,24 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
     <main className="app-shell">
       <header className="topbar">
         <div>
-          <span className="eyebrow">Nexus Demo &bull; Tenant {session.account.tenantId}</span>
+          <span className="eyebrow">Nexus Demo</span>
           <h1>{session.account.displayName}</h1>
         </div>
-        <button className="icon-button" aria-label="Log out" title="Log out" onClick={() => logoutMutation.mutate()} type="button">
-          <LogOut aria-hidden="true" />
-        </button>
+        
+        <div className="tenant-badge-desktop">
+          <span style={{ fontSize: "11px", color: "var(--text-muted, #6b7280)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>Active Tenant</span>
+          <strong style={{ fontSize: "16px", color: "var(--text-main, #111827)" }}>{session.account.tenantId}</strong>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+          <div className="tenant-badge-mobile">
+            <span style={{ fontSize: "11px", color: "var(--text-muted, #6b7280)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>Active Tenant</span>
+            <strong style={{ fontSize: "14px", color: "var(--text-main, #111827)" }}>{session.account.tenantId}</strong>
+          </div>
+          <button className="icon-button" aria-label="Log out" title="Log out" onClick={() => logoutMutation.mutate()} type="button">
+            <LogOut aria-hidden="true" />
+          </button>
+        </div>
       </header>
       <section className="workspace">
         <aside className="inventory-pane">
