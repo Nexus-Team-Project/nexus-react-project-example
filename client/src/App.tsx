@@ -1,7 +1,7 @@
 /** This file implements the Nexus demo UI for login, purchases, and barcodes. */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Barcode, CreditCard, DoorOpen, KeyRound, RefreshCw, Store, Ticket, UserRound } from "lucide-react";
+import { Barcode, CreditCard, DoorOpen, RefreshCw, Store, Ticket } from "lucide-react";
 import {
   createPurchase,
   getBarcode,
@@ -12,88 +12,32 @@ import {
   login,
   logout,
 } from "./api";
-import type { AccountRole, Barcode as BarcodeValue, OfferSummary, PurchasedOffer, Session } from "./types";
+import { LoginPage } from "./LoginPage";
+import { clearStoredSession, readSeenBarcodeIds, readStoredSession, writeSeenBarcodeIds, writeStoredSession } from "./sessionStore";
+import type { Barcode as BarcodeValue, OfferSummary, PurchasedOffer, Session } from "./types";
 
 const USER_EMAIL = "user@example.com";
+type UserView = "offers" | "purchases";
 
 /** Renders the complete Nexus demo application. */
 export function App(): JSX.Element {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<Session | null>(() => readStoredSession());
 
-  if (!session) {
-    return <LoginPage onLogin={setSession} />;
+  function handleLogin(nextSession: Session): void {
+    writeStoredSession(nextSession);
+    setSession(nextSession);
   }
 
-  return <Dashboard session={session} onLogout={() => setSession(null)} />;
-}
+  function handleLogout(): void {
+    clearStoredSession();
+    setSession(null);
+  }
 
-/** Renders role-aware login controls with seeded demo credentials. */
-function LoginPage(props: { onLogin: (session: Session) => void }): JSX.Element {
-  const [role, setRole] = useState<AccountRole>("USER");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const loginMutation = useMutation({
-    mutationFn: () => login({ role, email, password }),
-    onSuccess: props.onLogin,
-  });
-  const canSubmit = email.trim().length > 0 && password.length > 0 && !loginMutation.isPending;
+  if (!session) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
 
-  return (
-    <main className="login-shell">
-      <section className="login-panel" aria-labelledby="login-title">
-        <div className="brand-mark">
-          <KeyRound aria-hidden="true" />
-          <span>Nexus Demo</span>
-        </div>
-        <h1 id="login-title">Benefit checkout console</h1>
-        <p>Sign in to Nexus Demo to run the sandbox purchase and barcode flow.</p>
-        <div className="role-grid" role="radiogroup" aria-label="Demo login role">
-          <button className={role === "PARTNER" ? "role-card active" : "role-card"} onClick={() => setRole("PARTNER")} type="button">
-            <Store aria-hidden="true" />
-            <span>Partner</span>
-            <small>Business access</small>
-          </button>
-          <button className={role === "USER" ? "role-card active" : "role-card"} onClick={() => setRole("USER")} type="button">
-            <UserRound aria-hidden="true" />
-            <span>User</span>
-            <small>Buyer access</small>
-          </button>
-        </div>
-        <form className="login-form" onSubmit={(event) => {
-          event.preventDefault();
-          if (canSubmit) {
-            loginMutation.mutate();
-          }
-        }}>
-          <label>
-            <span>Email</span>
-            <input
-              autoComplete="email"
-              inputMode="email"
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="name@example.com"
-              type="email"
-              value={email}
-            />
-          </label>
-          <label>
-            <span>Password</span>
-            <input
-              autoComplete="current-password"
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Enter password"
-              type="password"
-              value={password}
-            />
-          </label>
-          <button className="primary-action" disabled={!canSubmit} type="submit">
-            {loginMutation.isPending ? "Signing in..." : `Sign in as ${role.toLowerCase()}`}
-          </button>
-        </form>
-        {loginMutation.error ? <p className="error-text">{loginMutation.error.message}</p> : null}
-      </section>
-    </main>
-  );
+  return <Dashboard session={session} onLogout={handleLogout} />;
 }
 
 /** Renders authenticated partner or user workflows for offers, checkout, and barcodes. */
@@ -102,6 +46,8 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
   const [selectedOffer, setSelectedOffer] = useState<OfferSummary | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [replayedBarcode, setReplayedBarcode] = useState<BarcodeValue | null>(null);
+  const [userView, setUserView] = useState<UserView>("offers");
+  const [oneTimeBarcode, setOneTimeBarcode] = useState<PurchasedOffer | null>(null);
   const { session } = props;
   const token = session.token;
   const tenantId = session.account.tenantId;
@@ -121,6 +67,7 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
     queryKey: ["purchases", token, tenantId, userEmail],
     queryFn: () => listPurchasedOffers(token, tenantId, userEmail),
     enabled: isUser,
+    refetchInterval: checkoutUrl ? 3500 : false,
   });
   const statsQuery = useQuery({
     queryKey: ["stats", token, tenantId],
@@ -133,7 +80,9 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
       return createPurchase(token, { tenantId, offerId: offer.offerId, email: userEmail, amount });
     },
     onSuccess: async (data) => {
+      setOneTimeBarcode(null);
       setCheckoutUrl(data.paymentSessionUrl);
+      setUserView("offers");
       await queryClient.invalidateQueries({ queryKey: ["purchases"] });
     },
   });
@@ -142,7 +91,21 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
     onSettled: props.onLogout,
   });
 
-  const latestBarcode = useMemo(() => isUser ? purchasesQuery.data?.[0]?.barcode ?? null : null, [isUser, purchasesQuery.data]);
+  useEffect(() => {
+    if (!isUser || !checkoutUrl || oneTimeBarcode || !purchasesQuery.data) {
+      return;
+    }
+
+    const seenIds = readSeenBarcodeIds(session.account.email);
+    const freshPurchase = purchasesQuery.data.find((purchase) => !seenIds.has(purchase.purchaseId));
+    if (!freshPurchase) {
+      return;
+    }
+
+    seenIds.add(freshPurchase.purchaseId);
+    writeSeenBarcodeIds(session.account.email, seenIds);
+    setOneTimeBarcode(freshPurchase);
+  }, [checkoutUrl, isUser, oneTimeBarcode, purchasesQuery.data, session.account.email]);
 
   return (
     <main className="app-shell">
@@ -176,22 +139,28 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
         <section className="action-pane">
           {isUser ? (
             <>
-              <OfferCheckout
-                error={purchaseMutation.error?.message}
-                isPending={purchaseMutation.isPending}
-                offer={selectedOffer}
-                onPurchase={(offer) => purchaseMutation.mutate(offer)}
-              />
-              {checkoutUrl ? <CheckoutFrame checkoutUrl={checkoutUrl} onRefresh={() => purchasesQuery.refetch()} /> : null}
-              <BarcodePanel
-                latestBarcode={latestBarcode}
-                purchases={purchasesQuery.data ?? []}
-                replayedBarcode={replayedBarcode}
-                onReplay={async (purchaseId) => {
-                  const response = await getBarcode(token, tenantId, userEmail, purchaseId);
-                  setReplayedBarcode(response.barcode);
-                }}
-              />
+              <UserTabs value={userView} onChange={setUserView} />
+              {userView === "offers" ? (
+                <>
+                  <OfferCheckout
+                    error={purchaseMutation.error?.message}
+                    isPending={purchaseMutation.isPending}
+                    offer={selectedOffer}
+                    onPurchase={(offer) => purchaseMutation.mutate(offer)}
+                  />
+                  {checkoutUrl ? <CheckoutFrame checkoutUrl={checkoutUrl} onRefresh={() => purchasesQuery.refetch()} /> : null}
+                  {oneTimeBarcode ? <OneTimeBarcode purchase={oneTimeBarcode} /> : null}
+                </>
+              ) : (
+                <PurchasesPanel
+                  purchases={purchasesQuery.data ?? []}
+                  replayedBarcode={replayedBarcode}
+                  onReplay={async (purchaseId) => {
+                    const response = await getBarcode(token, tenantId, userEmail, purchaseId);
+                    setReplayedBarcode(response.barcode);
+                  }}
+                />
+              )}
             </>
           ) : (
             <PartnerOfferPanel stats={statsQuery.data ?? []} />
@@ -199,6 +168,20 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
         </section>
       </section>
     </main>
+  );
+}
+
+/** Renders user navigation between offer checkout and purchase history. */
+function UserTabs(props: { value: UserView; onChange: (value: UserView) => void }): JSX.Element {
+  return (
+    <div className="tab-bar" role="tablist" aria-label="User workspace">
+      <button className={props.value === "offers" ? "tab-button active" : "tab-button"} onClick={() => props.onChange("offers")} type="button">
+        Offers
+      </button>
+      <button className={props.value === "purchases" ? "tab-button active" : "tab-button"} onClick={() => props.onChange("purchases")} type="button">
+        Purchases
+      </button>
+    </div>
   );
 }
 
@@ -256,22 +239,37 @@ function CheckoutFrame(props: { checkoutUrl: string; onRefresh: () => void }): J
   );
 }
 
-/** Renders first-time and replayed mock barcode data for paid purchases. */
-function BarcodePanel(props: {
-  latestBarcode: BarcodeValue | null;
+/** Renders the one-time barcode shown after a fresh payment completes. */
+function OneTimeBarcode(props: { purchase: PurchasedOffer }): JSX.Element {
+  return (
+    <section className="tool-band">
+      <SectionTitle icon={<Barcode aria-hidden="true" />} title="Payment complete" />
+      <BarcodeDisplay label={props.purchase.title} barcode={props.purchase.barcode} />
+    </section>
+  );
+}
+
+/** Renders purchase history with explicit buttons before showing a barcode. */
+function PurchasesPanel(props: {
   purchases: PurchasedOffer[];
   replayedBarcode: BarcodeValue | null;
   onReplay: (purchaseId: string) => Promise<void>;
 }): JSX.Element {
   return (
     <section className="tool-band">
-      <SectionTitle icon={<Barcode aria-hidden="true" />} title="Barcodes" />
-      {props.latestBarcode ? <BarcodeDisplay label="First visible barcode" barcode={props.latestBarcode} /> : <p className="muted">Paid purchases appear here after the PayMe callback reaches the API.</p>}
-      <div className="barcode-history">
+      <SectionTitle icon={<Barcode aria-hidden="true" />} title="Purchases" />
+      {props.purchases.length === 0 ? <p className="muted">Paid purchases appear here after the PayMe callback reaches the API.</p> : null}
+      <div className="purchase-history">
         {props.purchases.map((purchase) => (
-          <button className="secondary-action" key={purchase.purchaseId} onClick={() => void props.onReplay(purchase.purchaseId)} type="button">
-            View {purchase.title}
-          </button>
+          <div className="purchase-row" key={purchase.purchaseId}>
+            <span>
+              <strong>{purchase.title}</strong>
+              <small>{new Date(purchase.purchaseDate).toLocaleDateString()}</small>
+            </span>
+            <button className="secondary-action" onClick={() => void props.onReplay(purchase.purchaseId)} type="button">
+              Show barcode
+            </button>
+          </div>
         ))}
       </div>
       {props.replayedBarcode ? <BarcodeDisplay label="Viewed again" barcode={props.replayedBarcode} /> : null}

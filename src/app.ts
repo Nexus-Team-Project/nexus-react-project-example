@@ -22,7 +22,13 @@ export async function buildApp() {
     },
   });
 
-  await app.register(helmet);
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        "frame-ancestors": ["'self'", ...getAllowedOrigins()],
+      },
+    },
+  });
   await app.register(cors, {
     origin: getAllowedOrigins(),
     methods: ["GET", "POST", "OPTIONS"],
