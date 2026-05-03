@@ -67,6 +67,7 @@ export interface OfferStats {
   offerId: string;
   title: string;
   numberOfUsers: number;
+  userEmails: string[];
   totalPurchaseAmount: number;
 }
 

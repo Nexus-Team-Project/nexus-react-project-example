@@ -34,14 +34,14 @@ export async function getOfferStats(input: {
     include: { offer: true },
   });
 
-  const grouped = new Map<string, { title: string; users: Set<string>; total: number }>();
+  const grouped = new Map<string, { title: string; userEmails: Set<string>; total: number }>();
   for (const purchase of purchases) {
     const current = grouped.get(purchase.offer.publicId) ?? {
       title: purchase.offer.title,
-      users: new Set<string>(),
+      userEmails: new Set<string>(),
       total: 0,
     };
-    current.users.add(purchase.userEmailNormalized);
+    current.userEmails.add(purchase.userEmail);
     current.total += decimalToNumber(purchase.amount);
     grouped.set(purchase.offer.publicId, current);
   }
@@ -50,7 +50,8 @@ export async function getOfferStats(input: {
     stats: [...grouped.entries()].map(([offerId, value]) => ({
       offerId,
       title: value.title,
-      numberOfUsers: value.users.size,
+      numberOfUsers: value.userEmails.size,
+      userEmails: [...value.userEmails].sort((left, right) => left.localeCompare(right)),
       totalPurchaseAmount: value.total,
     })),
   };

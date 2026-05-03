@@ -370,17 +370,26 @@ p {
   padding: 12px 0;
 }
 
-.purchase-row span {
+.purchase-row span,
+.stat-row span {
   display: grid;
   gap: 4px;
 }
 
-.purchase-row small {
+.purchase-row small,
+.stat-row small {
   color: #686157;
 }
 
+.purchase-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .stat-row {
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 12px;
   border-top: 1px solid #ded8c9;
   padding: 10px 0;
@@ -399,6 +408,15 @@ p {
   .purchase-row {
     grid-template-columns: 1fr auto;
     align-items: center;
+  }
+
+  .purchase-row .barcode-box {
+    grid-column: 1 / -1;
+  }
+
+  .stat-row {
+    grid-template-columns: 1fr auto auto;
+    align-items: start;
   }
 }
 

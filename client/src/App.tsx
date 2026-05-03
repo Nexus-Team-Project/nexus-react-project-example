@@ -1,7 +1,7 @@
 /** This file implements the Nexus demo UI for login, purchases, and barcodes. */
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Barcode, CreditCard, DoorOpen, RefreshCw, Store, Ticket } from "lucide-react";
+import { Barcode, CreditCard, DoorOpen, Store, Ticket } from "lucide-react";
 import {
   createPurchase,
   getBarcode,
@@ -18,6 +18,10 @@ import type { Barcode as BarcodeValue, OfferSummary, PurchasedOffer, Session } f
 
 const USER_EMAIL = "user@example.com";
 type UserView = "offers" | "purchases";
+interface VisibleBarcode {
+  purchaseId: string;
+  barcode: BarcodeValue;
+}
 
 /** Renders the complete Nexus demo application. */
 export function App(): JSX.Element {
@@ -45,7 +49,7 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
   const queryClient = useQueryClient();
   const [selectedOffer, setSelectedOffer] = useState<OfferSummary | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
-  const [replayedBarcode, setReplayedBarcode] = useState<BarcodeValue | null>(null);
+  const [visibleBarcode, setVisibleBarcode] = useState<VisibleBarcode | null>(null);
   const [userView, setUserView] = useState<UserView>("offers");
   const [oneTimeBarcode, setOneTimeBarcode] = useState<PurchasedOffer | null>(null);
   const { session } = props;
@@ -105,6 +109,7 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
     seenIds.add(freshPurchase.purchaseId);
     writeSeenBarcodeIds(session.account.email, seenIds);
     setOneTimeBarcode(freshPurchase);
+    setCheckoutUrl(null);
   }, [checkoutUrl, isUser, oneTimeBarcode, purchasesQuery.data, session.account.email]);
 
   return (
@@ -148,16 +153,17 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
                     offer={selectedOffer}
                     onPurchase={(offer) => purchaseMutation.mutate(offer)}
                   />
-                  {checkoutUrl ? <CheckoutFrame checkoutUrl={checkoutUrl} onRefresh={() => purchasesQuery.refetch()} /> : null}
+                  {checkoutUrl ? <CheckoutFrame checkoutUrl={checkoutUrl} /> : null}
                   {oneTimeBarcode ? <OneTimeBarcode purchase={oneTimeBarcode} /> : null}
                 </>
               ) : (
                 <PurchasesPanel
                   purchases={purchasesQuery.data ?? []}
-                  replayedBarcode={replayedBarcode}
+                  visibleBarcode={visibleBarcode}
+                  onHide={() => setVisibleBarcode(null)}
                   onReplay={async (purchaseId) => {
                     const response = await getBarcode(token, tenantId, userEmail, purchaseId);
-                    setReplayedBarcode(response.barcode);
+                    setVisibleBarcode({ purchaseId, barcode: response.barcode });
                   }}
                 />
               )}
@@ -224,15 +230,11 @@ function OfferCheckout(props: {
 }
 
 /** Renders the PayMe hosted checkout URL in an iframe for the demo purchase flow. */
-function CheckoutFrame(props: { checkoutUrl: string; onRefresh: () => void }): JSX.Element {
+function CheckoutFrame(props: { checkoutUrl: string }): JSX.Element {
   return (
     <section className="checkout-frame">
       <div className="frame-header">
         <SectionTitle icon={<CreditCard aria-hidden="true" />} title="PayMe sandbox" />
-        <button className="secondary-action" onClick={props.onRefresh} type="button">
-          <RefreshCw aria-hidden="true" />
-          Refresh barcodes
-        </button>
       </div>
       <iframe title="PayMe sandbox checkout" src={props.checkoutUrl} />
     </section>
@@ -252,8 +254,9 @@ function OneTimeBarcode(props: { purchase: PurchasedOffer }): JSX.Element {
 /** Renders purchase history with explicit buttons before showing a barcode. */
 function PurchasesPanel(props: {
   purchases: PurchasedOffer[];
-  replayedBarcode: BarcodeValue | null;
+  visibleBarcode: VisibleBarcode | null;
   onReplay: (purchaseId: string) => Promise<void>;
+  onHide: () => void;
 }): JSX.Element {
   return (
     <section className="tool-band">
@@ -266,13 +269,20 @@ function PurchasesPanel(props: {
               <strong>{purchase.title}</strong>
               <small>{new Date(purchase.purchaseDate).toLocaleDateString()}</small>
             </span>
-            <button className="secondary-action" onClick={() => void props.onReplay(purchase.purchaseId)} type="button">
-              Show barcode
-            </button>
+            <div className="purchase-actions">
+              <button className="secondary-action" onClick={() => void props.onReplay(purchase.purchaseId)} type="button">
+                Show barcode
+              </button>
+              {props.visibleBarcode?.purchaseId === purchase.purchaseId ? (
+                <button className="secondary-action" onClick={props.onHide} type="button">
+                  Hide barcode
+                </button>
+              ) : null}
+            </div>
+            {props.visibleBarcode?.purchaseId === purchase.purchaseId ? <BarcodeDisplay label={purchase.title} barcode={props.visibleBarcode.barcode} /> : null}
           </div>
         ))}
       </div>
-      {props.replayedBarcode ? <BarcodeDisplay label="Viewed again" barcode={props.replayedBarcode} /> : null}
     </section>
   );
 }
@@ -289,7 +299,7 @@ function BarcodeDisplay(props: { label: string; barcode: BarcodeValue }): JSX.El
 }
 
 /** Renders partner-only offer stats without purchase or barcode controls. */
-function PartnerOfferPanel(props: { stats: Array<{ offerId: string; title: string; numberOfUsers: number; totalPurchaseAmount: number }> }): JSX.Element {
+function PartnerOfferPanel(props: { stats: Array<{ offerId: string; title: string; numberOfUsers: number; userEmails: string[]; totalPurchaseAmount: number }> }): JSX.Element {
   return (
     <section className="tool-band">
       <SectionTitle icon={<Store aria-hidden="true" />} title="Partner stats" />
@@ -297,7 +307,10 @@ function PartnerOfferPanel(props: { stats: Array<{ offerId: string; title: strin
       {props.stats.length === 0 ? <p className="muted">No paid purchases yet.</p> : null}
       {props.stats.map((stat) => (
         <div className="stat-row" key={stat.offerId}>
-          <span>{stat.title}</span>
+          <span>
+            <strong>{stat.title}</strong>
+            <small>{stat.userEmails.length > 0 ? stat.userEmails.join(", ") : "No buyers yet"}</small>
+          </span>
           <b>{stat.numberOfUsers} users</b>
           <b>{formatIls(stat.totalPurchaseAmount)}</b>
         </div>
