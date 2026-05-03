@@ -18,6 +18,11 @@ enum ApiTokenType {
   USER
 }
 
+enum LoginAccountStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum UserStatus {
   ACTIVE
   INACTIVE
@@ -94,6 +99,7 @@ model Tenant {
   updatedAt DateTime     @updatedAt
 
   apiTokens ApiToken[]
+  loginAccounts LoginAccount[]
   users     User[]
   offers    Offer[]
   purchases Purchase[]
@@ -118,6 +124,26 @@ model ApiToken {
   @@index([tenantId, userEmailNormalized, type])
 }
 
+model LoginAccount {
+  id                  String             @id @default(uuid())
+  role                ApiTokenType
+  email               String
+  emailNormalized     String
+  passwordHash        String
+  tenantId            String
+  userId              String?
+  status              LoginAccountStatus @default(ACTIVE)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@unique([role, emailNormalized])
+  @@index([tenantId, role, status])
+  @@index([userId])
+}
+
 model User {
   id                  String     @id @default(uuid())
   tenantId            String
@@ -130,6 +156,7 @@ model User {
   updatedAt           DateTime   @updatedAt
 
   tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  loginAccounts LoginAccount[]
   purchases Purchase[]
 
   @@unique([tenantId, emailNormalized])

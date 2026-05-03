@@ -1,6 +1,6 @@
 /** This file registers Nexus-compatible public offer routes. */
 import type { FastifyInstance } from "fastify";
-import { requireAuth, requirePartnerForTenant } from "../auth/auth.middleware.js";
+import { requireAccountForTenant, requireAuth } from "../auth/auth.middleware.js";
 import { offerListQuerySchema, offerLookupParamsSchema } from "./offers.schemas.js";
 import { resolveOfferRoute } from "./offers.service.js";
 
@@ -14,7 +14,7 @@ export async function registerOfferRoutes(app: FastifyInstance): Promise<void> {
       id: params.id,
       page: query.page,
       pageSize: query.pageSize,
-      assertTenantAccess: (tenantId: string) => requirePartnerForTenant(request, tenantId),
+      assertTenantAccess: (tenantId: string) => requireAccountForTenant(request, tenantId),
       ...(query.category ? { category: query.category } : {}),
     };
 

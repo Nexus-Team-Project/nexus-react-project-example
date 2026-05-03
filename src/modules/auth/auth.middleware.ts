@@ -24,6 +24,17 @@ export function requirePartnerForTenant(request: FastifyRequest, tenantPublicId:
   }
 }
 
+/** Requires a partner or user token that belongs to the requested tenant. */
+export function requireAccountForTenant(request: FastifyRequest, tenantPublicId: string): void {
+  if (!request.auth) {
+    throw new AppError("UNAUTHORIZED", "Bearer token is required");
+  }
+
+  if (request.auth.tenantPublicId !== tenantPublicId && !request.auth.scopes.includes("tenant:all")) {
+    throw new AppError("FORBIDDEN", "Access to the requested tenant is not allowed");
+  }
+}
+
 /** Requires a user token that matches the requested user email or has support scope. */
 export function requireUserForEmail(request: FastifyRequest, userEmailNormalized: string): void {
   if (!request.auth || request.auth.type !== "USER") {

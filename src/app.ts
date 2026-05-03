@@ -1,8 +1,11 @@
 /** This file builds the Fastify application and registers all API modules. */
+import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
+import { env } from "./config/env.js";
 import { AppError, sendApiError, toAppError } from "./shared/errors.js";
+import { registerAuthRoutes } from "./modules/auth/auth.routes.js";
 import { registerHealthRoutes } from "./modules/health/health.routes.js";
 import { registerOfferRoutes } from "./modules/offers/offers.routes.js";
 import { registerPayMeWebhookRoute } from "./modules/payments/payme.webhook.js";
@@ -20,6 +23,11 @@ export async function buildApp() {
   });
 
   await app.register(helmet);
+  await app.register(cors, {
+    origin: getAllowedOrigins(),
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type"],
+  });
   await app.register(rateLimit, {
     max: 120,
     timeWindow: "1 minute",
@@ -34,6 +42,7 @@ export async function buildApp() {
   });
 
   await registerHealthRoutes(app);
+  await registerAuthRoutes(app);
   await registerTestRoutes(app);
   await registerPayMeWebhookRoute(app);
   await registerUserOfferRoutes(app);
@@ -42,4 +51,9 @@ export async function buildApp() {
   await registerOfferRoutes(app);
 
   return app;
+}
+
+/** Reads configured browser origins and keeps CORS restricted to known clients. */
+function getAllowedOrigins(): string[] {
+  return env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim()).filter((origin) => origin.length > 0);
 }

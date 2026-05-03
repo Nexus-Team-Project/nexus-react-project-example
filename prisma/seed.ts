@@ -1,11 +1,15 @@
 /** This seed script creates DigiProduct tenants, users, offers, and test tokens. */
 import { PrismaClient } from "@prisma/client";
 import { env } from "../src/config/env.js";
-import { createOpaqueToken, sha256 } from "../src/shared/security.js";
+import { createOpaqueToken, hashPassword, sha256 } from "../src/shared/security.js";
 import { signTestToken } from "../src/modules/auth/token.service.js";
 
 const prisma = new PrismaClient();
 const CLOUDINARY_OFFERS_BASE_URL = "https://res.cloudinary.com/dyqjvjdlq/image/upload/offers";
+const DEMO_PARTNER_EMAIL = "partner@digiproduct.test";
+const DEMO_PARTNER_PASSWORD = "demo-partner-123";
+const DEMO_USER_EMAIL = "user@example.com";
+const DEMO_USER_PASSWORD = "demo-user-123";
 
 function offerImageUrl(fileName: string): string {
   return `${CLOUDINARY_OFFERS_BASE_URL}/${fileName}.png`;
@@ -36,13 +40,13 @@ async function seed(): Promise<void> {
     create: { tenantId: "digiproduct", name: "DigiProduct", status: "ACTIVE" },
   });
 
-  await prisma.user.upsert({
-    where: { tenantId_emailNormalized: { tenantId: tenant.id, emailNormalized: "user@example.com" } },
+  const user = await prisma.user.upsert({
+    where: { tenantId_emailNormalized: { tenantId: tenant.id, emailNormalized: DEMO_USER_EMAIL } },
     update: { status: "ACTIVE" },
     create: {
       tenantId: tenant.id,
-      email: "user@example.com",
-      emailNormalized: "user@example.com",
+      email: DEMO_USER_EMAIL,
+      emailNormalized: DEMO_USER_EMAIL,
       fullName: "Test User",
       phone: "0501234567",
       status: "ACTIVE",
@@ -106,6 +110,7 @@ async function seed(): Promise<void> {
   });
 
   await seedCustomOffer(tenant.id);
+  await seedLoginAccounts({ tenantId: tenant.id, userId: user.id });
 
   const partnerToken = signTestToken({ sub: "digiproduct-partner", type: "PARTNER", tenant: "digiproduct", scopes: ["offers:read", "purchase:create", "stats:read"] }, "30d");
   await prisma.apiToken.upsert({
@@ -119,7 +124,8 @@ async function seed(): Promise<void> {
     },
   });
 
-  const userToken = signTestToken({ sub: "user@example.com", type: "USER", tenant: "digiproduct", email: "user@example.com", scopes: ["status:read"] }, "7d");
+  const userScopes = ["offers:read", "purchase:create", "status:read"];
+  const userToken = signTestToken({ sub: DEMO_USER_EMAIL, type: "USER", tenant: "digiproduct", email: DEMO_USER_EMAIL, scopes: userScopes }, "7d");
   await prisma.apiToken.upsert({
     where: { tokenHash: sha256(userToken) },
     update: { revokedAt: null },
@@ -127,18 +133,62 @@ async function seed(): Promise<void> {
       tokenHash: sha256(userToken),
       type: "USER",
       tenantId: tenant.id,
-      userEmail: "user@example.com",
-      userEmailNormalized: "user@example.com",
-      scopes: ["status:read"],
+      userEmail: DEMO_USER_EMAIL,
+      userEmailNormalized: DEMO_USER_EMAIL,
+      scopes: userScopes,
     },
   });
 
   const unusedOpaqueToken = createOpaqueToken();
   console.log("Seed complete.");
+  console.log(`Demo partner login: ${DEMO_PARTNER_EMAIL} / ${DEMO_PARTNER_PASSWORD}`);
+  console.log(`Demo user login: ${DEMO_USER_EMAIL} / ${DEMO_USER_PASSWORD}`);
   console.log(`Partner bearer token: ${partnerToken}`);
   console.log(`User bearer token: ${userToken}`);
   console.log(`Unused opaque token sample: ${unusedOpaqueToken}`);
   console.log(`Configured PARTNER_API_TOKEN_HASH length: ${env.PARTNER_API_TOKEN_HASH.length}`);
+}
+
+/** Seeds hashed login accounts for the demo partner and related demo user. */
+async function seedLoginAccounts(input: { tenantId: string; userId: string }): Promise<void> {
+  await prisma.loginAccount.upsert({
+    where: { role_emailNormalized: { role: "PARTNER", emailNormalized: DEMO_PARTNER_EMAIL } },
+    update: {
+      email: DEMO_PARTNER_EMAIL,
+      passwordHash: await hashPassword(DEMO_PARTNER_PASSWORD),
+      tenantId: input.tenantId,
+      userId: null,
+      status: "ACTIVE",
+    },
+    create: {
+      role: "PARTNER",
+      email: DEMO_PARTNER_EMAIL,
+      emailNormalized: DEMO_PARTNER_EMAIL,
+      passwordHash: await hashPassword(DEMO_PARTNER_PASSWORD),
+      tenantId: input.tenantId,
+      status: "ACTIVE",
+    },
+  });
+
+  await prisma.loginAccount.upsert({
+    where: { role_emailNormalized: { role: "USER", emailNormalized: DEMO_USER_EMAIL } },
+    update: {
+      email: DEMO_USER_EMAIL,
+      passwordHash: await hashPassword(DEMO_USER_PASSWORD),
+      tenantId: input.tenantId,
+      userId: input.userId,
+      status: "ACTIVE",
+    },
+    create: {
+      role: "USER",
+      email: DEMO_USER_EMAIL,
+      emailNormalized: DEMO_USER_EMAIL,
+      passwordHash: await hashPassword(DEMO_USER_PASSWORD),
+      tenantId: input.tenantId,
+      userId: input.userId,
+      status: "ACTIVE",
+    },
+  });
 }
 
 /** Seeds a fixed-price offer with one active sub-offer and one cost option. */

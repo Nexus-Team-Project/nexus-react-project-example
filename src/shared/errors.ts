@@ -57,5 +57,23 @@ export function toAppError(error: unknown): AppError {
     return new AppError("VALIDATION_ERROR", "Request validation failed", error.flatten());
   }
 
+  if (isFastifyClientError(error)) {
+    return new AppError("BAD_REQUEST", error.message);
+  }
+
   return new AppError("INTERNAL_ERROR", "An unexpected server error occurred");
+}
+
+/** Detects Fastify request parsing errors that are safe to return as client mistakes. */
+function isFastifyClientError(error: unknown): error is { message: string; statusCode: number } {
+  return (
+    typeof error === "object"
+    && error !== null
+    && "message" in error
+    && "statusCode" in error
+    && typeof error.message === "string"
+    && typeof error.statusCode === "number"
+    && error.statusCode >= 400
+    && error.statusCode < 500
+  );
 }

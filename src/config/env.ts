@@ -9,6 +9,7 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32),
   PARTNER_API_TOKEN_HASH: z.string().min(1),
   ALLOW_PARTNER_STATUS_READS: z.coerce.boolean().default(false),
+  ALLOWED_ORIGINS: z.string().default("http://localhost:5173,http://localhost:5174,http://localhost:3000"),
   PAYME_ENV: z.enum(["sandbox", "production"]).default("sandbox"),
   PAYME_API_KEY: z.string().min(1),
   PAYME_BASE_URL: z.string().min(1),

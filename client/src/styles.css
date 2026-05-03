@@ -1,0 +1,369 @@
+/** This file styles the Nexus demo with responsive, work-focused layouts. */
+:root {
+  color-scheme: light;
+  font-family: "Aptos", "Segoe UI", system-ui, sans-serif;
+  background: #f4f2eb;
+  color: #191919;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button {
+  font: inherit;
+}
+
+.login-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background:
+    linear-gradient(90deg, rgba(25, 25, 25, 0.08) 1px, transparent 1px),
+    linear-gradient(rgba(25, 25, 25, 0.08) 1px, transparent 1px),
+    #f4f2eb;
+  background-size: 42px 42px;
+}
+
+.login-panel {
+  width: min(520px, 100%);
+  border: 1px solid #191919;
+  background: #fffdf6;
+  padding: 28px;
+  box-shadow: 10px 10px 0 #191919;
+}
+
+.brand-mark,
+.section-title,
+.topbar,
+.frame-header,
+.checkout-line,
+.stat-row {
+  display: flex;
+  align-items: center;
+}
+
+.brand-mark {
+  gap: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.brand-mark svg,
+.section-title svg,
+.icon-button svg,
+.secondary-action svg {
+  width: 20px;
+  height: 20px;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+.login-panel h1,
+.topbar h1 {
+  margin-top: 16px;
+  font-size: clamp(2rem, 6vw, 4.25rem);
+  line-height: 0.95;
+  letter-spacing: 0;
+}
+
+.login-panel p {
+  margin-top: 16px;
+  max-width: 42ch;
+  color: #555046;
+}
+
+.role-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.login-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.login-form label {
+  display: grid;
+  gap: 7px;
+  font-weight: 800;
+}
+
+.login-form input {
+  width: 100%;
+  border: 1px solid #191919;
+  background: #fffdf6;
+  color: #191919;
+  padding: 13px 14px;
+  font: inherit;
+}
+
+.login-form input:focus {
+  outline: 3px solid #d8ff62;
+  outline-offset: 2px;
+}
+
+.role-card,
+.offer-row,
+.primary-action,
+.secondary-action,
+.icon-button {
+  border: 1px solid #191919;
+  background: #fffdf6;
+  color: #191919;
+  cursor: pointer;
+}
+
+.role-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  padding: 16px;
+  text-align: left;
+}
+
+.role-card svg {
+  grid-row: span 2;
+  width: 28px;
+  height: 28px;
+}
+
+.role-card span,
+.offer-row strong,
+.barcode-box strong {
+  font-weight: 800;
+}
+
+.role-card small,
+.offer-row small,
+.checkout-line small,
+.barcode-box small,
+.barcode-box span,
+.muted {
+  color: #686157;
+}
+
+.role-card.active,
+.offer-row.active {
+  background: #d8ff62;
+}
+
+.primary-action {
+  width: 100%;
+  margin-top: 18px;
+  padding: 14px 18px;
+  background: #191919;
+  color: #fffdf6;
+  font-weight: 800;
+}
+
+.primary-action.compact {
+  width: auto;
+  min-width: 110px;
+  margin-top: 0;
+}
+
+.primary-action:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.error-text {
+  margin-top: 12px;
+  color: #b42318;
+  font-weight: 700;
+}
+
+.app-shell {
+  min-height: 100vh;
+  background: #f4f2eb;
+}
+
+.topbar {
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border-bottom: 1px solid #191919;
+  background: #fffdf6;
+}
+
+.eyebrow {
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.icon-button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+  padding: 18px;
+}
+
+.inventory-pane,
+.tool-band,
+.checkout-frame {
+  border: 1px solid #191919;
+  background: #fffdf6;
+}
+
+.inventory-pane,
+.tool-band {
+  padding: 16px;
+}
+
+.section-title {
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.section-title h2 {
+  font-size: 1rem;
+  text-transform: uppercase;
+}
+
+.offer-list,
+.action-pane,
+.barcode-history {
+  display: grid;
+  gap: 12px;
+}
+
+.offer-row {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 10px;
+  text-align: left;
+}
+
+.offer-row img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border: 1px solid #191919;
+}
+
+.offer-row span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.offer-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checkout-line {
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.checkout-line span {
+  display: grid;
+  gap: 4px;
+}
+
+.checkout-frame {
+  overflow: hidden;
+}
+
+.frame-header {
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #191919;
+}
+
+.checkout-frame iframe {
+  display: block;
+  width: 100%;
+  height: min(72vh, 680px);
+  border: 0;
+  background: white;
+}
+
+.secondary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 9px 12px;
+  font-weight: 800;
+}
+
+.barcode-box {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  border: 1px dashed #191919;
+  padding: 16px;
+  background: #eef7ff;
+}
+
+.barcode-box strong {
+  overflow-wrap: anywhere;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: clamp(1rem, 3vw, 1.45rem);
+}
+
+.barcode-history {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-top: 12px;
+}
+
+.stat-row {
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid #ded8c9;
+  padding: 10px 0;
+}
+
+@media (min-width: 720px) {
+  .role-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .topbar,
+  .workspace {
+    padding: 24px;
+  }
+}
+
+@media (min-width: 1080px) {
+  .workspace {
+    grid-template-columns: minmax(320px, 430px) 1fr;
+    align-items: start;
+  }
+
+  .inventory-pane {
+    position: sticky;
+    top: 24px;
+  }
+}
