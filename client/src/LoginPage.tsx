@@ -36,10 +36,6 @@ export function LoginPage(props: { onLogin: (session: Session) => void }): JSX.E
       </div>
       <section className="login-panel-wrapper">
         <div className="login-panel">
-          <div className="brand-mark mobile-brand">
-            <KeyRound aria-hidden="true" />
-            <span>Nexus Demo</span>
-          </div>
           <h1 id="login-title">Welcome back</h1>
           <p className="login-subtitle">Sign in to your account to continue</p>
           

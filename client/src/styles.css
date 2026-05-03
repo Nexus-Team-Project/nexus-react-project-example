@@ -53,13 +53,15 @@ button {
 }
 
 .login-hero {
-  display: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 40px 32px 0;
+  color: #1d1d1f;
 }
 
 @media (min-width: 900px) {
   .login-hero {
-    display: flex;
-    flex-direction: column;
     justify-content: center;
     padding: 80px;
     background-color: #000000;
@@ -83,33 +85,55 @@ button {
 }
 
 .hero-brand {
-  color: #ffffff;
-  margin-bottom: 40px;
-}
-
-.hero-brand svg {
-  color: #ffffff;
-}
-
-.hero-title {
-  font-size: 3.5rem;
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.04em;
+  color: #86868b;
   margin-bottom: 24px;
 }
 
+@media (min-width: 900px) {
+  .hero-brand {
+    color: #ffffff;
+    margin-bottom: 40px;
+  }
+}
+
+.hero-brand svg {
+  color: inherit;
+}
+
+.hero-title {
+  font-size: 2.25rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  margin-bottom: 16px;
+}
+
+@media (min-width: 900px) {
+  .hero-title {
+    font-size: 3.5rem;
+    margin-bottom: 24px;
+  }
+}
+
 .hero-subtitle {
-  font-size: 1.25rem;
-  line-height: 1.6;
-  color: rgba(255,255,255,0.8);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #4b5563;
+}
+
+@media (min-width: 900px) {
+  .hero-subtitle {
+    font-size: 1.25rem;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.8);
+  }
 }
 
 .login-panel-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px;
+  padding: 32px 24px 64px;
 }
 
 /* Login Panel */
@@ -124,6 +148,10 @@ button {
 }
 
 @media (min-width: 900px) {
+  .login-panel-wrapper {
+    padding: 40px;
+  }
+  
   .login-panel {
     background: transparent;
     backdrop-filter: none;
@@ -135,13 +163,7 @@ button {
 }
 
 .mobile-brand {
-  display: flex;
-}
-
-@media (min-width: 900px) {
-  .mobile-brand {
-    display: none;
-  }
+  display: none;
 }
 
 .app-shell {
