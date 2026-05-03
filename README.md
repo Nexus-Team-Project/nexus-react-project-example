@@ -123,8 +123,9 @@ curl -H "Authorization: Bearer YOUR_PARTNER_TOKEN" http://localhost:3000/offers/
 
 ## Implemented Server Flows
 
+## Implemented Server Flows
+
 - `GET /health`
-- `GET /ready`
 - `GET /offers/digiproduct`
 - `GET /offers/:offerId`
 - `POST /purchase`
