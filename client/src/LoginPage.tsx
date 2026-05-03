@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { KeyRound, Store, UserRound } from "lucide-react";
+import { toast } from "sonner";
 import { login } from "./api";
 import type { AccountRole, Session } from "./types";
 
@@ -12,7 +13,10 @@ export function LoginPage(props: { onLogin: (session: Session) => void }): JSX.E
   const [password, setPassword] = useState("");
   const loginMutation = useMutation({
     mutationFn: () => login({ role, email, password }),
-    onSuccess: props.onLogin,
+    onSuccess: (session) => {
+      toast.success(`Logged in successfully!`);
+      props.onLogin(session);
+    },
   });
   const canSubmit = email.trim().length > 0 && password.length > 0 && !loginMutation.isPending;
 

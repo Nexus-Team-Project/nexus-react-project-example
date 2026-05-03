@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Barcode, CreditCard, LogOut, Store, Ticket } from "lucide-react";
+import { toast } from "sonner";
 import {
   createPurchase,
   getBarcode,
@@ -92,7 +93,10 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
   });
   const logoutMutation = useMutation({
     mutationFn: () => logout(token),
-    onSettled: props.onLogout,
+    onSettled: () => {
+      toast.success("Logged out successfully!");
+      props.onLogout();
+    },
   });
 
   useEffect(() => {
