@@ -130,7 +130,7 @@ function Dashboard(props: { session: Session; onLogout: () => void }): JSX.Eleme
     <main className="app-shell">
       <header className="topbar">
         <div>
-          <span className="eyebrow">Nexus Demo</span>
+          <span className="eyebrow">Nexus Demo &bull; Tenant {session.account.tenantId}</span>
           <h1>{session.account.displayName}</h1>
         </div>
         <button className="icon-button" aria-label="Log out" title="Log out" onClick={() => logoutMutation.mutate()} type="button">
