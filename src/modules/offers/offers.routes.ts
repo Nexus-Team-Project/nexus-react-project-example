@@ -14,6 +14,34 @@ interface DemoOffer {
   category: string;
 }
 
+/** Represents one fixed-price or custom-price option in the documentation mock response. */
+type DemoCostOption =
+  | {
+      type: "fixed";
+      cost: number;
+      available: number;
+    }
+  | {
+      type: "custom";
+      minAmount: number;
+      maxAmount: number;
+      available: number;
+    };
+
+interface DemoSubOffer {
+  subOfferId: string;
+  images: string[];
+  title: string;
+  summary: string;
+  terms: string;
+  costOptions: DemoCostOption[];
+}
+
+interface DemoOfferDetails {
+  offerId: string;
+  subOffers: DemoSubOffer[];
+}
+
 const demoOffers: DemoOffer[] = [
   {
     offerId: "offer_shop_100",
@@ -75,6 +103,48 @@ function getDemoOfferList(query: { page: number; pageSize: number; category?: st
   };
 }
 
+/** Returns offer details that match the published GET /offers/{offerId} response schema. */
+function getDemoOfferDetails(offerId: string): DemoOfferDetails {
+  return {
+    offerId,
+    subOffers: [
+      {
+        subOfferId: "sub_001",
+        images: [
+          "https://cdn.example.com/offers/sub_001/main.jpg"
+        ],
+        title: "ILS 250 Digital Voucher",
+        summary: "Use online or in-store",
+        terms: "Valid for 12 months. Not combinable with other discounts.",
+        costOptions: [
+          {
+            type: "fixed",
+            cost: 199,
+            available: 35
+          }
+        ]
+      },
+      {
+        subOfferId: "sub_002",
+        images: [
+          "https://cdn.example.com/offers/sub_002/main.jpg"
+        ],
+        title: "Custom Gift Card",
+        summary: "Choose your own amount",
+        terms: "Redeemable in participating locations only.",
+        costOptions: [
+          {
+            type: "custom",
+            minAmount: 100,
+            maxAmount: 1000,
+            available: 120
+          }
+        ]
+      }
+    ]
+  };
+}
+
 /** Adds GET /offers/:id for tenant offer lists and offer details. */
 export async function registerOfferRoutes(app: FastifyInstance): Promise<void> {
   app.get("/offers/:id", { preHandler: requireAuth }, async (request) => {
@@ -86,15 +156,7 @@ export async function registerOfferRoutes(app: FastifyInstance): Promise<void> {
       if (params.id === "tenant_001") {
         return getDemoOfferList(query);
       }
-      return {
-        offerId: params.id,
-        title: "Demo Offer Details",
-        description: "This is a high-end demo offer for API testing purposes.",
-        price: 250,
-        currency: "ILS",
-        image: "https://cdn.nexus.com/offers/demo.jpg",
-        terms: "Demo terms and conditions apply."
-      };
+      return getDemoOfferDetails(params.id);
     }
 
     const routeInput = {
