@@ -9,7 +9,7 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32),
   PARTNER_API_TOKEN_HASH: z.string().min(1),
   ALLOW_PARTNER_STATUS_READS: z.coerce.boolean().default(false),
-  ALLOWED_ORIGINS: z.string().default("http://localhost:5173,http://localhost:5174,http://localhost:3000"),
+  ALLOWED_ORIGINS: z.string().default("http://localhost:5173,http://localhost:5174,http://localhost:3000,http://localhost:3001"),
   PAYME_ENV: z.enum(["sandbox", "production"]).default("sandbox"),
   PAYME_API_KEY: z.string().min(1),
   PAYME_BASE_URL: z.string().min(1),
@@ -19,6 +19,8 @@ const envSchema = z.object({
   PUBLIC_API_BASE_URL: z.string().url(),
   PAYMENT_SUCCESS_URL: z.string().url(),
   PAYMENT_FAILURE_URL: z.string().url(),
+  DEMO_PARTNER_TOKEN: z.string().default("1"),
+  DEMO_USER_TOKEN: z.string().default("1"),
 });
 
 export type Env = z.infer<typeof envSchema>;

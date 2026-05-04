@@ -20,6 +20,29 @@ type JwtExpiresIn = NonNullable<SignOptions["expiresIn"]>;
 
 /** Validates a bearer token and returns its stored authorization context. */
 export async function authenticateBearerToken(token: string): Promise<AuthContext> {
+  // Documentation "Try it Out" interceptor
+  if (token === env.DEMO_PARTNER_TOKEN) {
+    return {
+      tokenId: "demo-partner-id",
+      type: "PARTNER",
+      tenantDbId: "demo-tenant-id", // Mock DB ID
+      tenantPublicId: "tenant_001",
+      userEmailNormalized: null,
+      scopes: ["tenant:all"],
+    };
+  }
+
+  if (token === env.DEMO_USER_TOKEN) {
+    return {
+      tokenId: "demo-user-id",
+      type: "USER",
+      tenantDbId: "demo-tenant-id",
+      tenantPublicId: "tenant_001",
+      userEmailNormalized: "demo@example.com",
+      scopes: [],
+    };
+  }
+
   let decoded: JwtPayload;
 
   try {

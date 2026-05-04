@@ -13,6 +13,19 @@ export async function registerUserOfferRoutes(app: FastifyInstance): Promise<voi
     const params = userStatusParamsSchema.parse(request.params);
     const email = normalizeEmail(params.userEmail);
 
+    // Documentation "Try it Out" mock interceptor
+    if (request.headers.authorization === `Bearer ${env.DEMO_USER_TOKEN}`) {
+      return [
+        {
+          purchaseId: "purchase_abc123",
+          offerId: "offer_98765",
+          title: "Digital Gift Card (Demo)",
+          status: "active",
+          purchasedAt: new Date().toISOString()
+        }
+      ];
+    }
+
     authorizeUserStatusRead(request, params.tenant, email);
     return getPurchasedOffersForUser(params.tenant, email);
   });
@@ -20,6 +33,15 @@ export async function registerUserOfferRoutes(app: FastifyInstance): Promise<voi
   app.get("/offers/barcodes/:tenant/:userEmail/:purchaseId", { preHandler: requireAuth }, async (request) => {
     const params = userBarcodeParamsSchema.parse(request.params);
     const email = normalizeEmail(params.userEmail);
+
+    // Documentation "Try it Out" mock interceptor
+    if (request.headers.authorization === `Bearer ${env.DEMO_USER_TOKEN}`) {
+      return {
+        purchaseId: params.purchaseId,
+        barcode: "123456789012",
+        status: "active"
+      };
+    }
 
     authorizeUserStatusRead(request, params.tenant, email);
     return getPurchasedOfferBarcode(params.tenant, email, params.purchaseId);
