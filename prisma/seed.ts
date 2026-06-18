@@ -5,32 +5,10 @@ import { createOpaqueToken, hashPassword, sha256 } from "../src/shared/security.
 import { signTestToken } from "../src/modules/auth/token.service.js";
 
 const prisma = new PrismaClient();
-const CLOUDINARY_OFFERS_BASE_URL = "https://res.cloudinary.com/dyqjvjdlq/image/upload/offers";
 const DEMO_PARTNER_EMAIL = "partner@digiproduct.test";
 const DEMO_PARTNER_PASSWORD = "demo-partner-123";
 const DEMO_USER_EMAIL = "user@example.com";
 const DEMO_USER_PASSWORD = "demo-user-123";
-
-function offerImageUrl(fileName: string): string {
-  return `${CLOUDINARY_OFFERS_BASE_URL}/${fileName}.png`;
-}
-
-function subOfferImageUrl(publicId: string): string {
-  const fallbackOfferIdBySubOffer: Record<string, string> = {
-    sub_digital_voucher_199: "offer_digital_voucher",
-    sub_coupon_code_50: "offer_coupon_code",
-    sub_premium_voucher_349: "offer_premium_voucher",
-    sub_weekend_coupon_75: "offer_weekend_coupon",
-  };
-
-  const fallbackOfferId = fallbackOfferIdBySubOffer[publicId];
-
-  if (fallbackOfferId) {
-    return offerImageUrl(fallbackOfferId);
-  }
-
-  return `${CLOUDINARY_OFFERS_BASE_URL}/${publicId}.png`;
-}
 
 /** Seeds all local data needed for manual API verification. */
 async function seed(): Promise<void> {
@@ -53,63 +31,50 @@ async function seed(): Promise<void> {
     },
   });
 
+  // Real partner coupons from coupons_selected.csv. These are percentage-discount
+  // codes (not fixed-price vouchers), so the price below is a sample test amount
+  // for the PayMe sandbox flow only. Images keep the original Wix URIs from the CSV.
   await seedOffer({
-    publicId: "offer_digital_voucher",
-    category: "voucher",
-    title: "Digital Gift Card",
-    summary: "Use this gift card across multiple partner stores",
-    imageUrl: offerImageUrl("offer_digital_voucher"),
-    offerType: "VOUCHER",
-    subOfferPublicId: "sub_digital_voucher_199",
-    subTitle: "199 NIS Digital Voucher",
+    publicId: "offer_sepa",
+    category: "קהילה",
+    title: "SEPA - ספה",
+    summary: "קבלו 20% על קטגורית הצלילה",
+    imageUrl: "wix:image://v1/57cf68_1c39ac42f1f84a6eafcd678f9c9d0f8d~mv2.jpg/sepa_opt.jpg#originWidth=600&originHeight=600",
+    offerType: "COUPON",
+    subOfferPublicId: "sub_sepa_20",
+    subTitle: "20% הנחה על קטגוריית הצלילה והשנרקול",
+    subSummary: "באתר הכניסו קוד קופון בעת הרכישה, בחנות הזדהו עם האזור האישי של מעגל הכרישים בתוקף.",
+    terms: "ההנחה ניתנת רק לחברי מעגל הכרישים בתוקף, על מוצרים פיזיים בלבד. אין כפל מבצעים. לא חל על שירותים, שוברים או דמי משלוח.",
+    imageUrl_sub: "wix:image://v1/57cf68_1c39ac42f1f84a6eafcd678f9c9d0f8d~mv2.jpg/sepa_opt.jpg#originWidth=600&originHeight=600",
     cost: "199",
     available: 35,
     tenantId: tenant.id,
   });
 
   await seedOffer({
-    publicId: "offer_coupon_code",
-    category: "coupon",
-    title: "Coupon Code",
-    summary: "Redeem a one-time DigiProduct coupon code",
-    imageUrl: offerImageUrl("offer_coupon_code"),
+    publicId: "offer_ovali",
+    category: "אלקטרוניקה",
+    title: "OVALI",
+    summary: "להנות עם 12% הנחה על כל דגמי השואבים והרובוטים של OVALI",
+    imageUrl: "wix:image://v1/57cf68_1ddcdd6688a9466682d4ef5c44b34942~mv2.jpg/ovali_opt.jpg#originWidth=600&originHeight=600",
     offerType: "COUPON",
-    subOfferPublicId: "sub_coupon_code_50",
-    subTitle: "50 NIS Coupon",
-    cost: "50",
-    available: 100,
-    tenantId: tenant.id,
-  });
-
-  await seedOffer({
-    publicId: "offer_premium_voucher",
-    category: "voucher",
-    title: "Premium Shopping Voucher",
-    summary: "A higher-value voucher for DigiProduct partner stores",
-    imageUrl: offerImageUrl("offer_premium_voucher"),
-    offerType: "VOUCHER",
-    subOfferPublicId: "sub_premium_voucher_349",
-    subTitle: "349 NIS Premium Voucher",
+    subOfferPublicId: "sub_ovali_12",
+    subTitle: "12% הנחה על כל דגמי השואבים והרובוטים",
+    subSummary: "מעתיקים את קוד הקופון, לוחצים על הכפתור ומועברים לאתר OVALI, בוחרים מוצר ומזינים את הקוד.",
+    terms: "משתנה בהתאם למוצר על פי תקנון אתר OVALI. ההנחה לא חלה בסניפים חיפה ובאר שבע.",
+    imageUrl_sub: "wix:image://v1/57cf68_1ddcdd6688a9466682d4ef5c44b34942~mv2.jpg/ovali_opt.jpg#originWidth=600&originHeight=600",
     cost: "349",
     available: 25,
     tenantId: tenant.id,
   });
 
-  await seedOffer({
-    publicId: "offer_weekend_coupon",
-    category: "coupon",
-    title: "Weekend Coupon",
-    summary: "A limited coupon for weekend DigiProduct purchases",
-    imageUrl: offerImageUrl("offer_weekend_coupon"),
-    offerType: "COUPON",
-    subOfferPublicId: "sub_weekend_coupon_75",
-    subTitle: "75 NIS Weekend Coupon",
-    cost: "75",
-    available: 80,
-    tenantId: tenant.id,
+  // Replace mode: archive any other offers for this tenant so only the CSV
+  // coupons stay ACTIVE and visible in the list/detail endpoints and the UI.
+  await prisma.offer.updateMany({
+    where: { tenantId: tenant.id, publicId: { notIn: ["offer_sepa", "offer_ovali"] } },
+    data: { status: "ARCHIVED" },
   });
 
-  await seedCustomOffer(tenant.id);
   await seedLoginAccounts({ tenantId: tenant.id, userId: user.id });
 
   const partnerToken = signTestToken({ sub: "digiproduct-partner", type: "PARTNER", tenant: "digiproduct", scopes: ["offers:read", "purchase:create", "stats:read"] }, "30d");
@@ -201,13 +166,16 @@ async function seedOffer(input: {
   offerType: "VOUCHER" | "COUPON";
   subOfferPublicId: string;
   subTitle: string;
+  subSummary: string;
+  terms: string;
+  imageUrl_sub: string;
   cost: string;
   available: number;
   tenantId: string;
 }): Promise<void> {
   const offer = await prisma.offer.upsert({
     where: { publicId: input.publicId },
-    update: { status: "ACTIVE", imageUrl: input.imageUrl },
+    update: { status: "ACTIVE", imageUrl: input.imageUrl, title: input.title, summary: input.summary, category: input.category },
     create: {
       publicId: input.publicId,
       tenantId: input.tenantId,
@@ -222,14 +190,14 @@ async function seedOffer(input: {
 
   const subOffer = await prisma.subOffer.upsert({
     where: { publicId: input.subOfferPublicId },
-    update: { status: "ACTIVE", imageUrls: [subOfferImageUrl(input.subOfferPublicId)] },
+    update: { status: "ACTIVE", imageUrls: [input.imageUrl_sub], title: input.subTitle, summary: input.subSummary, terms: input.terms },
     create: {
       publicId: input.subOfferPublicId,
       offerId: offer.id,
       title: input.subTitle,
-      summary: "Use online or in-store",
-      terms: "Valid for 12 months. Not combinable with other discounts.",
-      imageUrls: [subOfferImageUrl(input.subOfferPublicId)],
+      summary: input.subSummary,
+      terms: input.terms,
+      imageUrls: [input.imageUrl_sub],
       status: "ACTIVE",
     },
   });
@@ -243,52 +211,6 @@ async function seedOffer(input: {
       cost: input.cost,
       currency: "ILS",
       available: input.available,
-      status: "ACTIVE",
-    },
-  });
-}
-
-/** Seeds a custom gift-card offer with a minimum and maximum amount range. */
-async function seedCustomOffer(tenantId: string): Promise<void> {
-  const offer = await prisma.offer.upsert({
-    where: { publicId: "offer_custom_gift_card" },
-    update: { status: "ACTIVE", imageUrl: offerImageUrl("offer_custom_gift_card") },
-    create: {
-      publicId: "offer_custom_gift_card",
-      tenantId,
-      category: "gift-card",
-      title: "Custom Gift Card",
-      summary: "Choose a custom DigiProduct gift-card amount",
-      imageUrl: offerImageUrl("offer_custom_gift_card"),
-      offerType: "GIFT_CARD",
-      status: "ACTIVE",
-    },
-  });
-
-  const subOffer = await prisma.subOffer.upsert({
-    where: { publicId: "sub_custom_gift_card" },
-    update: { status: "ACTIVE", imageUrls: [subOfferImageUrl("sub_custom_gift_card")] },
-    create: {
-      publicId: "sub_custom_gift_card",
-      offerId: offer.id,
-      title: "Custom ILS Gift Card",
-      summary: "Choose any amount from 100 to 1000 ILS",
-      terms: "Valid for 12 months. The amount cannot be split after purchase.",
-      imageUrls: [subOfferImageUrl("sub_custom_gift_card")],
-      status: "ACTIVE",
-    },
-  });
-
-  await prisma.costOption.deleteMany({ where: { subOfferId: subOffer.id } });
-
-  await prisma.costOption.create({
-    data: {
-      subOfferId: subOffer.id,
-      type: "CUSTOM",
-      minAmount: "100",
-      maxAmount: "1000",
-      currency: "ILS",
-      available: 120,
       status: "ACTIVE",
     },
   });

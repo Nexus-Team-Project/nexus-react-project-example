@@ -96,7 +96,7 @@ export async function getBarcode(token: string, tenantId: string, userEmail: str
 
 /** Loads aggregate paid-offer stats for a partner account. */
 export async function getStats(token: string, tenantId: string): Promise<OfferStats[]> {
-  const response = await apiFetch<{ stats: OfferStats[] }>(`/offers/status/${encodeURIComponent(tenantId)}`, { token });
+  const response = await apiFetch<{ stats: OfferStats[] }>(`/offers/stats/${encodeURIComponent(tenantId)}`, { token });
   return response.stats;
 }
 
