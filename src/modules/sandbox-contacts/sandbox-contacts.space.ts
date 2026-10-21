@@ -33,10 +33,13 @@ function hashKey(key: string): string {
 
 /**
  * The space id for this request's key, creating the space on first use.
- * Throws 401 invalid_api_key for a missing / malformed key and 429 when this
+ * Throws 401 missing_api_key when no Bearer key is sent, 401 invalid_api_key
+ * for a malformed one (same as the real API), and 429 when this
  * IP already opened too many spaces in the last hour.
  */
 export async function resolveSpaceId(authorization: string | undefined, ip: string): Promise<string> {
+  const sent = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
+  if (!sent) throw new SandboxApiError(401, "missing_api_key", "missing_api_key");
   const key = readSandboxKey(authorization);
   if (!key) throw new SandboxApiError(401, "invalid_api_key", "invalid_api_key");
   const keyHash = hashKey(key);
