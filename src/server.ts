@@ -3,6 +3,7 @@ import { buildApp } from "./app.js";
 import { env } from "./config/env.js";
 import { disconnectPrisma } from "./db/prisma.js";
 import { startExpiredPurchaseCleanupJob } from "./modules/purchases/purchases.cleanup.js";
+import { startSandboxCleanupJob } from "./modules/sandbox-contacts/sandbox-contacts.space.js";
 
 /** Starts Fastify and installs graceful shutdown hooks. */
 async function startServer(): Promise<void> {
@@ -16,8 +17,14 @@ async function startServer(): Promise<void> {
     },
   });
 
+  const sandboxCleanup = startSandboxCleanupJob({
+    info: (data, message) => app.log.info(data, message),
+    error: (data, message) => app.log.error(data, message),
+  });
+
   const close = async () => {
     expiredPurchaseCleanup.stop();
+    sandboxCleanup.stop();
     await app.close();
     await disconnectPrisma();
   };

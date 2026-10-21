@@ -174,3 +174,14 @@ PAYME_REQUIRE_WEBHOOK_SIGNATURE=false
 ```
 
 For real production payments, set it to `true` after the webhook signature format is implemented and verified.
+
+## Contacts API sandbox (docs "Try it out")
+
+`src/modules/sandbox-contacts/` serves the docs site's Contacts API "Try it out" at `/api/v1/integrations/contacts*` - the same paths, bodies and `{ error, code }` responses as the real Nexus Contacts API, against this sandbox's own Postgres (never real Nexus data).
+
+- Auth: any `Authorization: Bearer nxk_test_sandbox_<16-64 letters/digits/_/->` key is a private space, created on first use and deleted 24h later (hourly cleanup). The docs page generates one random key per browser.
+- Limits: 30 calls/min per key, 5/min for bulk / bulk-delete / delete-all, 10 new keys per hour per IP, 1,000 contacts per space, 1,000 rows per bulk call (the real API accepts 10,000).
+- Simplified vs the real API: no wallet join approvals (`joinRequestsApproved` is always 0), every contact counts as "not joined", custom columns are text only, keys have all permissions.
+- Migrations now run on start (`npm start` = `prisma migrate deploy && node ...`), so Railway applies them on deploy.
+
+Local: Postgres is mapped to port **5434** (`docker compose up -d postgres`; `DATABASE_URL=...@localhost:5434/nexus_test`).

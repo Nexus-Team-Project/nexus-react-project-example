@@ -13,10 +13,14 @@ import { registerPurchaseRoutes } from "./modules/purchases/purchases.routes.js"
 import { registerStatsRoutes } from "./modules/stats/stats.routes.js";
 import { registerTestRoutes } from "./modules/test/test.routes.js";
 import { registerUserOfferRoutes } from "./modules/users/user-offers.routes.js";
+import { registerSandboxContactsRoutes } from "./modules/sandbox-contacts/sandbox-contacts.routes.js";
 
 /** Creates a configured Fastify app with security middleware and routes. */
 export async function buildApp() {
   const app = Fastify({
+    // Railway adds one proxy hop: trust exactly that one so request.ip is the
+    // real client (rate limits), without trusting client-sent X-Forwarded-For.
+    trustProxy: 1,
     logger: {
       redact: ["req.headers.authorization", "headers.authorization", "*.PAYME_API_KEY"],
     },
@@ -31,7 +35,7 @@ export async function buildApp() {
   });
   await app.register(cors, {
     origin: getAllowedOrigins(),
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type"],
   });
   await app.register(rateLimit, {
@@ -55,6 +59,7 @@ export async function buildApp() {
   await registerStatsRoutes(app);
   await registerPurchaseRoutes(app);
   await registerOfferRoutes(app);
+  await registerSandboxContactsRoutes(app);
 
   return app;
 }

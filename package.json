@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && tsc",
-    "start": "node dist/src/server.js",
+    "start": "prisma migrate deploy && node dist/src/server.js",
     "lint": "tsc --noEmit",
     "upload:offers-images": "tsx scripts/upload-offers-images.ts",
     "prisma:generate": "prisma generate",

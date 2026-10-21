@@ -328,3 +328,55 @@ model WebhookEvent {
   @@index([provider, eventId])
   @@index([provider, createdAt])
 }
+
+/// Docs "Try it out" sandbox for the Contacts API: one private space per random
+/// nxk_test_sandbox_ key (stored as sha256), deleted 24h after creation.
+model SandboxSpace {
+  id        String           @id @default(uuid())
+  keyHash   String           @unique
+  createdIp String?
+  createdAt DateTime         @default(now())
+  expiresAt DateTime
+  contacts  SandboxContact[]
+  columns   SandboxColumn[]
+
+  @@index([createdIp, createdAt])
+  @@index([expiresAt])
+}
+
+/// A test contact inside one sandbox space (mirrors the real API contact view).
+model SandboxContact {
+  id              String       @id @default(uuid())
+  spaceId         String
+  externalId      String?
+  firstName       String?
+  lastName        String?
+  email           String?
+  normalizedEmail String?
+  phone           String?
+  address         String?
+  allowedServices String[]
+  customFields    Json         @default("{}")
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  space           SandboxSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, normalizedEmail])
+  @@unique([spaceId, phone])
+  @@unique([spaceId, externalId])
+  @@index([spaceId, createdAt])
+}
+
+/// A custom contact column inside one sandbox space (text only).
+model SandboxColumn {
+  id             String       @id @default(uuid())
+  spaceId        String
+  fieldId        String
+  name           String
+  normalizedName String
+  createdAt      DateTime     @default(now())
+  space          SandboxSpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, fieldId])
+  @@unique([spaceId, normalizedName])
+}
