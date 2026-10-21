@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "docker compose up -d --wait postgres",
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && tsc",
     "start": "prisma migrate deploy && node dist/src/server.js",

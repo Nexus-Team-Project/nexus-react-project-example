@@ -184,4 +184,4 @@ For real production payments, set it to `true` after the webhook signature forma
 - Simplified vs the real API: no wallet join approvals (`joinRequestsApproved` is always 0), every contact counts as "not joined", custom columns are text only, keys have all permissions.
 - Migrations now run on start (`npm start` = `prisma migrate deploy && node ...`), so Railway applies them on deploy.
 
-Local: Postgres is mapped to port **5434** (`docker compose up -d postgres`; `DATABASE_URL=...@localhost:5434/nexus_test`).
+Local: Postgres is mapped to port **5434** (`DATABASE_URL=...@localhost:5434/nexus_test`). `npm run dev` starts it first (`predev` = `docker compose up -d --wait postgres`), so Docker Desktop must be running.
